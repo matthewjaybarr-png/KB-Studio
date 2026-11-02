@@ -1,11 +1,39 @@
 # Shoot Studio: agent instructions
 
+KB Studio (repo name shoot-studio): photo culling and editing, plus Create, a Canva-style design editor with classroom and preschool tools. Create is the main focus.
+
 Shoot Studio is a Tauri photo culling and editing app: Rust in `src-tauri/src`,
 plain JavaScript in `ui/` with no bundler. This repository is public, so keep
 personal details, real photos and local paths out of code, docs and commits.
 
+## Build and checks (from the repository root)
+
+Needs Rust, Node.js, Chromium and Tauri 2 Linux system libraries (README.md, Development).
+- Run: `npx @tauri-apps/cli@2 dev`.
+- Build the local binary: `cargo build --release --manifest-path src-tauri/Cargo.toml`.
+- Rust tests: `cargo test --release --manifest-path src-tauri/Cargo.toml` (matches CI).
+- UI checks: `node ui-check.cjs` (headless Chromium, mocked Tauri commands;
+  set `CHROMIUM` to select the browser; exercises WebGL2 through SwiftShader).
+- Lint: `cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml`.
+- `live-check.sh` drives the real window on a hidden Hyprland monitor; read its
+  usage first and use disposable shoot folders because the app writes `.shootstudio/`.
+
+## Code map
+
+- `ui/app.js`: photo browsing; `ui/develop.js`: photo editing controls.
+- `ui/create.js`: Create design editor; other `ui/*.js` split out its tools.
+- `ui/index.html` and `ui/style.css`: shared markup and styles; `ui/vendor/`: bundled libraries.
+- `src-tauri/src/main.rs`: Tauri commands, photo loading, recipes and delivery.
+- `src-tauri/src/retouch.rs`, `photocraft*.rs` and `photocraft*/`: image processing.
+- `src-tauri/src/creations.rs`, `pptx.rs`, `backup.rs`: designs, imports and backups.
+- Large files: `main.rs` and `create.js` (~2,200 lines), `app.js` (~1,100),
+  `photocraft_remove.rs` (~1,400), `ui-check.cjs` (~3,300). Locate the symbol first,
+  then read a relevant line range with `sed -n 'START,ENDp'`; do not read them whole.
+- `ui-check.cjs` is the UI regression harness; `test-data/` holds synthetic fixtures.
+
 ## Shared notes
 
+Never read `PROJECT_NOTES.md` whole; retrieve only the relevant note by header and ID.
 Chats may share a git-ignored `PROJECT_NOTES.md`. Never edit it directly:
 post each note as a fenced `project-note` block in your reply, under 4,000
 characters. When a round is committed and checked, close its notes with one
@@ -13,8 +41,10 @@ characters. When a round is committed and checked, close its notes with one
 carry anything still open into a single `BACKLOG` note. Never close a note
 whose open items aren't carried in the backlog, a doc or git.
 
-## Checks
+## Releases
 
-- `node ui-check.cjs` (headless Chromium, mocked Tauri commands).
-- `cargo test` and `cargo clippy --all-targets` in `src-tauri/`.
+- Keep versions in `src-tauri/Cargo.toml`, its application entry in `Cargo.lock`,
+  and `src-tauri/tauri.conf.json` aligned; record releases in `CHANGELOG.md`.
+- Release builds come only from `.github/workflows/release.yml` on Ubuntu 22.04
+  for Zorin OS 17 compatibility. Local builds do not validate signed updates.
 - Commit only when the owner asks; the owner pushes and tags.
