@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.51.0
+
+- 🔄 **Turning things works again.** The little toolbar above a selection used to sit right on top of the turn handle, so a newly placed element couldn't be rotated. The toolbar now always moves clear of every handle.
+- Something at the very top of the page couldn't be turned either: its turn handle was off the edge of the screen. Now the handle moves to the bottom edge, like Canva's, whenever the top one is out of reach.
+- The What's new card moves to the other corner, or fades so you can click through it, when it's in the way of a selection's handles.
+
 ## 0.50.0
 
 - ✅ **Checklists**, in Classroom → Puzzles and worksheets under Checking progress: a page for each child on your class list, with three tick boxes on every item for three check-ins across the year (and a line for each check-in's date). Check:
