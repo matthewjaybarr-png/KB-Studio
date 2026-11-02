@@ -1462,7 +1462,7 @@ const test = `<script>
     {
       const covered = [], offStage = [], stage = () => $('#create-stage').getBoundingClientRect();
       const probe = label => {
-        board.renderAll(); const s = stage(), o = board.getActiveObject();
+        board.renderAll(); board.renderAll(); const s = stage(), o = board.getActiveObject(); // twice: a handle that flips back on the next frame is a bug
         for (const h of handleSpots(o)) {
           const x = (h.left + h.right) / 2, y = (h.top + h.bottom) / 2;
           if (x < s.left || x > s.right || y < s.top || y > s.bottom) { offStage.push(label + ' ' + h.key); continue; }

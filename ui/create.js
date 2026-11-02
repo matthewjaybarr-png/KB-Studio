@@ -1590,7 +1590,7 @@ function placeRotateHandle(o) {
   if (!mtr || !o.hasControls || transforming) return;
   const edge = 8 + (typeof rulersOn === 'function' && rulersOn() ? RULER : 0);
   const reachable = () => { o.setCoords(); const c = o.oCoords.mtr; return c.x >= edge && c.y >= edge && c.x <= board.width - 8 && c.y <= board.height - 8; };
-  const side = y => { if (mtr.y !== y) { const c = new fabric.Control({ ...mtr, y, offsetY: y < 0 ? -40 : 40 }); o.controls = { ...o.controls, mtr: c }; } };
+  const side = y => { const now = o.controls.mtr; if (now.y !== y) o.controls = { ...o.controls, mtr: new fabric.Control({ ...now, y, offsetY: y < 0 ? -40 : 40 }) }; };
   side(-0.5);
   if (reachable()) return;
   side(0.5);
