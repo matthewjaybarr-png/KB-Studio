@@ -211,6 +211,7 @@ function startBoard() {
   board.on('mouse:over', ({ target }) => { hovered = target; board.requestRenderAll(); });
   board.on('mouse:out', () => { hovered = null; board.requestRenderAll(); });
   for (const e of ['object:moving', 'object:scaling', 'object:rotating']) board.on(e, () => { transforming = true; });
+  board.on('before:render', () => placeRotateHandle(board.getActiveObject()));
   board.on('after:render', paintFloat);
   board.on('mouse:down', ({ e, target }) => {
     closeMenus();
@@ -1560,16 +1561,63 @@ $('#float-more').onclick = () => { const r = $('#float-more').getBoundingClientR
 function paintFloat() {
   const bar = $('#create-float'), o = board?.getActiveObject();
   bar.hidden = !o || mode !== 'create' || transforming || !!cropSession || board.isDrawingMode;
+  stepAsideCards(o && mode === 'create' && board ? handleSpots(o) : []);
   if (bar.hidden) return;
   const locked = board.getActiveObjects().some(x => x.kbLocked), lock = $('#float-lock');
   lock.classList.toggle('locked', locked); lock.title = locked ? 'Unlock' : 'Lock'; lock.setAttribute('aria-label', lock.title);
   $('#prop-copy').hidden = $('#prop-delete').hidden = locked;
   const r = o.getBoundingRect(), v = board.viewportTransform, canvas = board.upperCanvasEl.getBoundingClientRect();
   const host = $('#create').getBoundingClientRect(), stage = $('#create-stage').getBoundingClientRect();
-  const x = canvas.left + (r.left + r.width / 2) * v[0] + v[4], top = canvas.top + r.top * v[3] + v[5], bottom = canvas.top + (r.top + r.height) * v[3] + v[5];
-  const y = top - 46 >= stage.top + 4 ? top - 46 : Math.min(bottom + 10, stage.bottom - 44);
-  bar.style.left = Math.min(Math.max(x, stage.left + 90), stage.right - 90) - host.left + 'px';
+  const x = canvas.left + (r.left + r.width / 2) * v[0] + v[4];
+  // Clear of every handle, not just the box: the rotate handle sits 40px out (above, or anywhere once turned),
+  // and a bar parked over it meant the selection could not be turned at all.
+  const spots = handleSpots(o, canvas), height = bar.offsetHeight || 38, gap = 8;
+  const top = Math.min(canvas.top + r.top * v[3] + v[5], ...spots.map(s => s.top));
+  const bottom = Math.max(canvas.top + (r.top + r.height) * v[3] + v[5], ...spots.map(s => s.bottom));
+  const left = Math.min(Math.max(x, stage.left + 90), stage.right - 90), width = bar.offsetWidth || 180;
+  const clear = y => !spots.some(s => s.right > left - width / 2 && s.left < left + width / 2 && s.bottom > y && s.top < y + height);
+  // Above, else below, else the first spot along the stage that covers no handle (a selection bigger than the view).
+  const fits = y => y >= stage.top + 4 && y + height <= stage.bottom - 4;
+  const tries = [top - gap - height, bottom + gap].filter(fits).concat(stage.top + 4, stage.bottom - height - 4);
+  const y = tries.find(clear) ?? tries[0];
+  bar.style.left = left - host.left + 'px';
   bar.style.top = y - host.top + 'px';
+}
+// The rotate handle sits 40px past the top edge, so anything at the top of the page had it off the stage (or under
+// the ruler) and could not be turned. It moves to the bottom edge, like Canva's, whenever the top spot can't be reached.
+function placeRotateHandle(o) {
+  const mtr = o?.controls?.mtr;
+  if (!mtr || !o.hasControls || transforming) return;
+  const edge = 8 + (typeof rulersOn === 'function' && rulersOn() ? RULER : 0);
+  const reachable = () => { o.setCoords(); const c = o.oCoords.mtr; return c.x >= edge && c.y >= edge && c.x <= board.width - 8 && c.y <= board.height - 8; };
+  const side = y => { if (mtr.y !== y) { const c = new fabric.Control({ ...mtr, y, offsetY: y < 0 ? -40 : 40 }); o.controls = { ...o.controls, mtr: c }; } };
+  side(-0.5);
+  if (reachable()) return;
+  side(0.5);
+  if (!reachable()) side(-0.5), o.setCoords(); // neither fits (zoomed right in): leave it where people expect it
+}
+// The What's new and import cards sit on the stage; when the selection's handles run under one it moves to the
+// other corner, and if they are there too it fades and lets clicks through to the handles.
+function stepAsideCards(spots) {
+  for (const card of [$('#create-whatsnew'), $('#create-import-note')]) {
+    card.classList.remove('aside-right', 'aside-fade');
+    if (card.hidden || !spots.length) continue;
+    const hit = () => { const r = card.getBoundingClientRect(); return spots.some(s => s.right > r.left && s.left < r.right && s.bottom > r.top && s.top < r.bottom); };
+    if (!hit()) continue;
+    card.classList.add('aside-right');
+    if (hit()) { card.classList.remove('aside-right'); card.classList.add('aside-fade'); }
+  }
+}
+// Each handle of the selection as a screen rectangle, padded so a bar never sits right against one.
+function handleSpots(o, canvas = board.upperCanvasEl.getBoundingClientRect()) {
+  if (!o.hasControls || !o.oCoords) return [];
+  const half = Math.max(o.cornerSize || 13, o.touchCornerSize || 0) / 2 + 4, spots = [];
+  o.forEachControl((control, key) => {
+    const c = o.oCoords[key];
+    if (!c || !o.isControlVisible(key)) return;
+    spots.push({ key, left: canvas.left + c.x - half, right: canvas.left + c.x + half, top: canvas.top + c.y - half, bottom: canvas.top + c.y + half });
+  });
+  return spots;
 }
 
 // ---- The rail and its drawers ----

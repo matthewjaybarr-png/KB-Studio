@@ -1458,6 +1458,43 @@ const test = `<script>
     step(!heading.kbLocked && shown('#prop-font') && !$('#prop-delete').hidden, 'Unlock in the toolbar unlocks it');
     selectObjects([box]); centreOnPage();
     step(Math.abs(box.getBoundingRect().left + box.getBoundingRect().width / 2 - 408) < 1 && Math.abs(box.getBoundingRect().top + box.getBoundingRect().height / 2 - 528) < 1, 'Centre on the page centres it both ways');
+    // Nothing may sit on a selection handle: the floating toolbar once covered the rotate handle of every new element.
+    {
+      const covered = [], offStage = [], stage = () => $('#create-stage').getBoundingClientRect();
+      const probe = label => {
+        board.renderAll(); const s = stage(), o = board.getActiveObject();
+        for (const h of handleSpots(o)) {
+          const x = (h.left + h.right) / 2, y = (h.top + h.bottom) / 2;
+          if (x < s.left || x > s.right || y < s.top || y > s.bottom) { offStage.push(label + ' ' + h.key); continue; }
+          const el = document.elementFromPoint(x, y);
+          if (el?.classList.contains('ruler')) { offStage.push(label + ' ' + h.key); continue; } // the rulers frame the stage like its edge
+          if (el !== board.upperCanvasEl) covered.push(label + ': ' + h.key + ' under ' + (el ? el.id || el.className || el.tagName : 'nothing'));
+        }
+      };
+      const [pw, ph] = pagePx(), kinds = ['heading', 'rect', 'circle', 'line', 'arrow', 'star'], made = [];
+      for (const kind of kinds) { if (kind === 'heading') $('#add-heading').click(); else addShape(kind); const o = board.getActiveObject(); o.exitEditing?.(); made.push([kind, o]); }
+      made.push(['picture', await settle(addImageBlob(png, 'sweep'), 'sweep picture')]);
+      addShape('circle'); const g1 = board.getActiveObject(); addShape('triangle'); const g2 = board.getActiveObject();
+      selectObjects([g1, g2]); await settle(Promise.resolve(groupSelected()), 'sweep group'); made.push(['group', board.getActiveObject()]);
+      const spots = { middle: [0.5, 0.5], 'page top': [0.5, 0], 'page bottom': [0.5, 1], 'page left': [0, 0.5], 'page right': [1, 0.5], 'top corner': [1, 0] };
+      for (const drawerOpen of [true, false]) for (const rulers of [false, true]) for (const zoom of ['fit', 'zoomed']) {
+        if (drawerOpen === $('#create-drawer').hidden) document.querySelector('[data-drawer=elements]').click();
+        settings.rulers = rulers; drawRulers(); fitBoard(); if (zoom === 'zoomed') zoomBoard(board.getZoom() * 2);
+        for (const [kind, o] of made) for (const [spot, [fx, fy]] of Object.entries(spots)) for (const angle of [0, 45, 90, 180]) {
+          selectObjects([o]); o.rotate(angle); o.setCoords();
+          const r = o.getBoundingRect(); o.set({ left: o.left + fx * (pw - r.width) - r.left, top: o.top + fy * (ph - r.height) - r.top }); o.setCoords();
+          probe(kind + ' ' + spot + ' ' + angle + '° ' + (drawerOpen ? 'drawer' : 'no drawer') + (rulers ? ' rulers ' : ' ') + zoom);
+        }
+        fitBoard(); selectObjects(made.map(m => m[1])); probe('everything selected');
+      }
+      settings.rulers = false; drawRulers(); fitBoard();
+      for (const [, o] of made) board.remove(o);
+      box.rotate(0); selectObjects([box]); centreOnPage();
+      window.handleSweep = { covered, offStage };
+      const unreachable = offStage.filter(x => x.includes(' fit ')); // at Fit every handle must be on the stage; zoomed in, edges may be off
+      step(!unreachable.length, () => 'at Fit every handle is on the stage (' + unreachable.length + '): ' + unreachable.slice(0, 10).join('; '));
+      step(!covered.length, () => { const by = {}; for (const c of covered) { const k = c.split(' under ')[1]; (by[k] ||= []).push(c.split(':')[0]); } return 'no handle is covered (' + covered.length + '): ' + Object.entries(by).map(([k, v]) => k + ' x' + v.length + ' [' + [...new Set(v)].slice(0, 5).join(' | ') + ']').join('; '); });
+    }
     openMenu(100, 100);
     const menuItems = () => [...$('#create-menu').querySelectorAll('button')].map(b => b.firstChild.textContent);
     step(!$('#create-menu').hidden && ['Copy', 'Duplicate', 'Bring to front', 'Send to back', 'Lock'].every(i => menuItems().includes(i)), () => 'the right-click menu offers copy, layer and lock actions: ' + menuItems());
