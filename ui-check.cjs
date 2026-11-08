@@ -92,6 +92,7 @@ window.__TAURI__ = { core: { Channel: class { onmessage() {} }, invoke: async (c
   if (command === 'save_output') { const h = options.headers, name = decodeURIComponent(h.name) + '.' + h.ext; if (window.saveCancel && h.ask !== 'no') return ''; (window.outputs ??= {})[name] = { bytes: args, ask: h.ask }; return '/home/me/Downloads/' + name; }
   if (command === 'show_output') { (window.shown ??= []).push(args); return null; }
   if (command === 'read_dropped') return window.droppedPng.arrayBuffer();
+  if (command === 'read_clipboard_image') return window.nativeClipboardPng?.arrayBuffer() ?? new ArrayBuffer(0);
   if (command === 'print_page') { window.printed = (window.printed || 0) + 1; window.printPaper = [args.width, args.height]; return null; }
   if (command === 'load_create_settings') return JSON.parse(disk.createSettings || 'null');
   if (command === 'save_create_settings') { disk.createSettings = JSON.stringify(args.settings); return null; }
@@ -1383,6 +1384,12 @@ const test = `<script>
     const framed = board.getObjects().at(-1); selectObjects([framed]); put($('#prop-frame'), 'rounded', 'change');
     await settle(flush(), 'frame saved'); await settle(openDesign(propertiesTitle), 'frame reopened');
     step(board.getObjects().at(-1).clipPath?.rx === board.getObjects().at(-1).width / 8, 'picture clipPath survives reopening');
+    // WebKitGTK can dispatch a paste event without exposing the system image as a File.
+    window.nativeClipboardPng = png;
+    document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true }));
+    await until(() => adding.size === 0 && board.getObjects().at(-1).kbName === 'Photo Clipboard' && board.getObjects().length === 4, 'native clipboard image imports when WebKit supplies no files');
+    delete window.nativeClipboardPng;
+    board.remove(board.getObjects().at(-1)); commitDesign();
     $('#create').inert = true;
     document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
     step(adding.size === 0 && board.getObjects().length === 3, 'paste respects the closing freeze'); $('#create').inert = false;

@@ -1227,6 +1227,32 @@ async fn read_dropped(uri: String) -> Result<Response, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// WebKitGTK can send a paste event without the image that GTK has on the system clipboard.
+#[cfg(target_os = "linux")]
+#[tauri::command]
+async fn read_clipboard_image(app: AppHandle) -> Result<Response, String> {
+    let (sender, mut receiver) = tauri::async_runtime::channel(1);
+    app.run_on_main_thread(move || {
+        let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
+        clipboard.request_image(move |_, image| {
+            let png = image
+                .map(|image| image.save_to_bufferv("png", &[]))
+                .transpose()
+                .map(|png| Response::new(png.unwrap_or_default()))
+                .map_err(|error| error.to_string());
+            let _ = sender.try_send(png);
+        });
+    })
+    .map_err(|error| error.to_string())?;
+    receiver.recv().await.ok_or("clipboard read ended early")?
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+fn read_clipboard_image() -> Response {
+    Response::new(Vec::<u8>::new())
+}
+
 /// Print: the system's print dialog for what the page has laid out for printing, on paper of `width` × `height`
 /// inches with no margins. GTK's own margins would shift and shrink everything a little, enough to miss a sheet of
 /// labels; the page already keeps its words clear of the edge.
@@ -1461,6 +1487,7 @@ fn main() {
             show_output,
             print_page,
             read_dropped,
+            read_clipboard_image,
             load_create_settings,
             save_create_settings,
             read_pptx

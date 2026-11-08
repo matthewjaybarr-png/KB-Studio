@@ -6,6 +6,7 @@
 - Photos has a contact sheet with a selection control on each thumbnail, plus Clear selection and Clear stars. Keyboard shortcuts are available from the Shortcuts button.
 - In Develop, choose a Heal or Clone source with the mouse, finish retouching with Done, or use Cancel crop to discard a crop.
 - Create keeps its tool rail, drawers, canvas, and page strip. The drawer sits alongside the canvas in smaller windows, and the Edit menu brings common canvas actions into the toolbar.
+- Create can paste images from the system clipboard on Zorin and other WebKitGTK desktops.
 
 ## 0.51.0
 

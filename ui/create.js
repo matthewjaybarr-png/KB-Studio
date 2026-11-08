@@ -1445,8 +1445,14 @@ function pasteSelected(source = designClipboard) {
 document.addEventListener('paste', e => {
   if (mode !== 'create' || cropSession || $('#create').inert || e.target.matches?.('input, textarea, select') || board?.getActiveObject()?.isEditing) return;
   const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
-  if (files.length) { e.preventDefault(); importFiles(files); }
-  else if (designClipboard) { e.preventDefault(); pasteSelected(); }
+  e.preventDefault();
+  if (files.length) { importFiles(files); return; }
+  const copied = designClipboard;
+  track((async () => {
+    const png = new Uint8Array(await invoke('read_clipboard_image'));
+    if (png.length) await importFiles([new File([png], 'Clipboard.png', { type: 'image/png' })]);
+    else await pasteSelected(copied);
+  })().catch(error => { $('#create-saved').textContent = 'Could not paste: ' + error; }));
 });
 $('#prop-delete').onclick = () => removeSelected();
 $('#prop-copy').onclick = () => duplicateSelected();
