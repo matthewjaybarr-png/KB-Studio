@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.52.0
+
+- Start frames the original illustration and uses it as a soft backdrop. A lighter version sits behind the workspace tools and contact sheet. Slightly darker labels make the controls easier to read.
+- Photos has a contact sheet with a selection control on each thumbnail, plus Clear selection and Clear stars. Keyboard shortcuts are available from the Shortcuts button.
+- In Develop, choose a Heal or Clone source with the mouse, finish retouching with Done, or use Cancel crop to discard a crop.
+- Create keeps its tool rail, drawers, canvas, and page strip. The drawer sits alongside the canvas in smaller windows, and the Edit menu brings common canvas actions into the toolbar.
+
 ## 0.51.0
 
 - 🔄 **Turning things works again.** The little toolbar above a selection used to sit right on top of the turn handle, so a newly placed element couldn't be rotated. The toolbar now always moves clear of every handle.

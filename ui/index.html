@@ -2,33 +2,73 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KB Studio</title><link rel="stylesheet" href="style.css"></head>
 <body>
   <div id="update" role="status" hidden><span id="update-text"></span> <button id="update-now" type="button">Update now</button></div>
-  <header>
-    <button id="photos-home" type="button" title="Back to the start screen">⌂ Start</button>
-    <button id="open" type="button">Open shoot</button>
-    <strong id="shoot-name">No shoot open</strong>
-    <div id="views" class="segmented" role="group" aria-label="View"><button type="button" data-view="grid" title="All the photos (Esc)">Grid</button><button type="button" data-view="loupe" title="One photo, large (Enter)">Photo</button><button type="button" data-view="compare" title="Two photos side by side (C)">Compare</button><button type="button" data-view="develop" title="Edit the photo (D)">Develop</button></div>
-    <label>Show <select id="filter"><option value="all">All</option><option value="picks">Picks</option><option value="unrated">Unrated</option></select></label>
-    <span id="counts"></span>
-    <span id="status" role="status"></span>
-    <button id="use-in-design" type="button" title="Put this photo, or your picks, on a page in Create: a page each, a collage or photo strips" disabled>Use in a design</button>
-    <button id="deliver-open" type="button" title="Ctrl+E" disabled>Deliver…</button>
+  <header class="shoot-bar">
+    <div class="shoot-controls">
+      <button id="photos-home" type="button" title="Back to the start screen">⌂ Start</button>
+      <button id="open" type="button">Open shoot</button>
+    </div>
+    <div class="shoot-info">
+      <strong id="shoot-name">No shoot open</strong>
+      <span id="counts"></span>
+      <span id="status" role="status"></span>
+    </div>
+    <div class="shoot-controls">
+      <div id="views" class="segmented" role="group" aria-label="View"><button type="button" data-view="grid" title="All the photos (Esc)">Grid</button><button type="button" data-view="loupe" title="One photo, large (Enter)">Photo</button><button type="button" data-view="compare" title="Two photos side by side (C)">Compare</button><button type="button" data-view="develop" title="Edit the photo (D)">Develop</button></div>
+      <label>Show <select id="filter"><option value="all">All</option><option value="picks">Picks</option><option value="unrated">Unrated</option></select></label>
+    </div>
+    <div class="shoot-controls shoot-output">
+      <button id="use-in-design" type="button" title="Put this photo, or your picks, on a page in Create: a page each, a collage or photo strips" disabled>Use in a design</button>
+      <button id="deliver-open" type="button" title="Ctrl+E" disabled>Deliver…</button>
+    </div>
   </header>
   <div id="photo-bar" role="toolbar" aria-label="Rate and adjust the photo" hidden>
     <span class="group"><button type="button" data-flag="pick" title="Pick (P)">⚑ Pick</button><button type="button" data-flag="reject" title="Reject (X)">✕ Reject</button><button type="button" data-flag="" title="Unflag (U)">Unflag</button></span>
-    <span class="group stars" aria-label="Stars"><button type="button" data-stars="1" title="1 star (1)">★</button><button type="button" data-stars="2" title="2 stars (2)">★</button><button type="button" data-stars="3" title="3 stars (3)">★</button><button type="button" data-stars="4" title="4 stars (4)">★</button><button type="button" data-stars="5" title="5 stars (5)">★</button></span>
+    <span class="group" role="group" aria-label="Star rating"><span class="stars"><button type="button" data-stars="1" title="1 star (1)">★</button><button type="button" data-stars="2" title="2 stars (2)">★</button><button type="button" data-stars="3" title="3 stars (3)">★</button><button type="button" data-stars="4" title="4 stars (4)">★</button><button type="button" data-stars="5" title="5 stars (5)">★</button></span><button id="pb-clear-stars" type="button" disabled>Clear stars</button></span>
     <span class="group" data-for="develop"><button type="button" id="pb-before" title="Hold the button down to see the photo before your edits (or hold \)">Hold for before</button><button type="button" id="pb-undo" title="Undo (Ctrl+Z)" >↶ Undo</button><button type="button" id="pb-redo" title="Redo (Ctrl+Shift+Z)" >↷ Redo</button></span>
     <span class="group" data-for="develop"><button type="button" id="pb-out" title="Zoom out (−)" aria-label="Zoom out">−</button><button type="button" id="pb-fit" title="Fit the photo (0)">Fit</button><button type="button" id="pb-100" title="Actual pixels (1)">100%</button><button type="button" id="pb-in" title="Zoom in (+)" aria-label="Zoom in">+</button></span>
     <span class="group" data-for="grid loupe develop"><button type="button" id="pb-copy" title="Copy this photo's settings (Ctrl+C)">Copy settings</button><button type="button" id="pb-paste" title="Paste settings (Ctrl+V)">Paste settings</button></span>
-    <span class="group" data-for="grid"><button type="button" id="pb-all" title="Select every photo, to paste settings onto them (Ctrl+A)">Select all</button></span>
+    <span class="group" data-for="grid"><button type="button" id="pb-all" title="Select every photo shown (Ctrl+A)">Select all</button><button type="button" id="pb-clear" disabled>Clear selection</button></span>
   </div>
   <section id="home" aria-label="Start">
-    <div class="home-hero"><div><h1>KB Studio</h1><p class="hero-line">Teach · Create · Inspire</p><p class="hero-ask">What are we making today?</p></div></div>
-    <p id="home-status" role="status"></p>
-    <p id="home-backup"><span id="home-backup-text"></span> <button id="home-backup-go" type="button"></button></p>
-    <div class="home-main"><button id="home-photos" type="button"><strong>Photos</strong><small>Cull, develop and deliver a shoot</small></button><button id="home-create" type="button"><strong>Create</strong><small>Posters, labels, charts and cards</small></button><button id="home-edit" type="button"><strong>Edit a photo</strong><small>Remove things, heal and retouch</small></button><button id="home-import" type="button"><strong>Import from Canva</strong><small>In Canva: Share → Download → PowerPoint</small></button><input id="edit-file" type="file" accept="image/png,image/jpeg,image/webp" hidden><input id="import-file" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/png,image/jpeg" hidden></div>
-    <div id="home-latest" hidden><h2>Recent designs <button id="home-see-all" type="button" class="link">All designs and folders ↓</button></h2><div id="home-latest-list" class="home-list one-row"></div></div>
-    <h2>Start from a template</h2><div id="home-templates" class="home-list"></div>
-    <div id="home-designs" hidden><h2>Your designs</h2><div id="home-folders" class="folder-bar" role="toolbar" aria-label="Folders"></div><p id="home-folder-note" class="hint"></p><div id="home-recent" class="home-list"></div></div>
+    <div class="home-content">
+      <div class="home-hero">
+        <div><h1>KB Studio</h1><p class="hero-line">Teach · Create · Inspire</p><p class="hero-ask">What are we making today?</p></div>
+        <img src="home-art.jpg" width="1254" height="1254" alt="">
+      </div>
+      <div class="home-main" role="group" aria-label="Start a project">
+        <button id="home-create" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h3M8 16h3M16 12v5m-2.5-2.5h5"/></svg>
+          <strong>Create</strong><small>Posters, labels, charts and cards</small>
+        </button>
+        <button id="home-photos" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <strong>Photos</strong><small>Cull, develop and deliver a shoot</small>
+        </button>
+        <button id="home-edit" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20 15 9M14 4v3M19 9h-3M17.5 5.5l-2 2M6 6l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM18 14l.7 1.3L20 16l-1.3.7L18 18l-.7-1.3L16 16l1.3-.7z"/></svg>
+          <strong>Edit a photo</strong><small>Remove things, heal and retouch</small>
+        </button>
+        <button id="home-import" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 15v5h14v-5"/></svg>
+          <strong>Import from Canva</strong><small>In Canva, choose Share → Download → PowerPoint</small>
+        </button>
+        <input id="edit-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <input id="import-file" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/png,image/jpeg" hidden>
+      </div>
+      <p id="home-status" role="status"></p>
+      <p id="home-backup"><span id="home-backup-text"></span> <button id="home-backup-go" type="button"></button></p>
+      <section id="home-latest" class="home-shelf" aria-labelledby="home-latest-title" hidden>
+        <div class="home-shelf-head"><h2 id="home-latest-title">Recent designs</h2><button id="home-see-all" type="button">All designs and folders ↓</button></div>
+        <div id="home-latest-list" class="home-list"></div>
+      </section>
+      <section class="home-shelf" aria-labelledby="home-templates-title">
+        <h2 id="home-templates-title">Start from a template</h2>
+        <div id="home-templates" class="home-list"></div>
+      </section>
+      <section id="home-designs" class="home-shelf" aria-labelledby="home-designs-title" hidden>
+        <h2 id="home-designs-title">Your designs</h2><div id="home-folders" class="folder-bar" role="toolbar" aria-label="Folders"></div><p id="home-folder-note" class="hint"></p><div id="home-recent" class="home-list"></div>
+      </section>
+    </div>
   </section>
   <div id="home-menu" role="menu" hidden></div>
   <dialog id="name-dialog"><form method="dialog"><h3 id="name-title"></h3><input id="name-input" type="text" maxlength="80" spellcheck="false" aria-labelledby="name-title"><p id="name-error" role="alert"></p><div class="row"><button value="ok" class="primary">OK</button><button value="cancel" formnovalidate>Cancel</button></div></form></dialog>
@@ -125,8 +165,9 @@
     <div class="create-bar">
       <button id="create-home" type="button">⌂ Start</button>
       <button id="file-open" type="button" data-pop="pop-file">File</button>
+      <button id="create-edit" type="button" aria-haspopup="menu" aria-controls="create-menu" aria-expanded="false">Edit</button>
       <input id="create-title" type="text" aria-label="Design name" spellcheck="false">
-      <button id="create-undo" type="button" title="Undo (Ctrl+Z)" >↶ Undo</button><button id="create-redo" type="button" title="Redo (Ctrl+Y)" >↷ Redo</button>
+      <span class="segmented" role="group" aria-label="History"><button id="create-undo" type="button" title="Undo (Ctrl+Z)">↶ Undo</button><button id="create-redo" type="button" title="Redo (Ctrl+Y)">↷ Redo</button></span>
       <button type="button" data-pop="pop-resize">Resize</button>
       <span id="create-saved" role="status"></span>
       <span class="zoom"><button id="create-zoom-out" type="button" aria-label="Zoom out">−</button><output id="create-zoom">100%</output><button id="create-zoom-in" type="button" aria-label="Zoom in">+</button><button id="create-fit" type="button">Fit</button><button id="create-rulers" type="button" title="Show rulers; drag from one onto the page for a guide line">📏 Rulers</button><button id="create-guides-clear" type="button" hidden>Clear guides</button></span>
@@ -306,7 +347,16 @@
           <p class="hint" id="draw-hint"></p>
         </section>
         <section data-panel="retouch" hidden>
-          <div id="photo-tabs" class="segmented" role="group" aria-label="Photo tools"><button type="button" data-photo-tab="retouch">Retouch</button><button type="button" data-photo-tab="faces">Faces</button><button type="button" data-photo-tab="cutout">Cut out</button><button type="button" data-photo-tab="straighten">Straighten</button><button type="button" data-photo-tab="reshape">Reshape</button><button type="button" data-photo-tab="stretch">Stretch</button><button type="button" data-photo-tab="effects">Effects</button></div>
+          <h3>Edit photo</h3>
+          <div id="photo-tabs" role="group" aria-label="Photo tools">
+            <button type="button" data-photo-tab="retouch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4-1L20 7l-3-3L5 16zM15 6l3 3"/></svg>Retouch</button>
+            <button type="button" data-photo-tab="faces"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M9 10h.01M15 10h.01m-6 5a4 4 0 0 0 6 0"/></svg>Faces</button>
+            <button type="button" data-photo-tab="cutout"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8 8 12 12M8 16 20 4"/></svg>Cut out</button>
+            <button type="button" data-photo-tab="straighten"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 13-3 2 13-15 3zM3 21h18"/></svg>Straighten</button>
+            <button type="button" data-photo-tab="reshape"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4q8 4 16 0-4 8 0 16-8-4-16 0 4-8 0-16z"/></svg>Reshape</button>
+            <button type="button" data-photo-tab="stretch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18m-14-4-4 4 4 4m10-8 4 4-4 4"/></svg>Stretch</button>
+            <button type="button" data-photo-tab="effects"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m11 3 2.3 6.7L20 12l-6.7 2.3L11 21l-2.3-6.7L2 12l6.7-2.3zM19 3v4m-2-2h4"/></svg>Effects</button>
+          </div>
           <div id="photo-retouch">
           <h3>Retouch a picture</h3>
           <div id="touch-tools" class="effect-grid" role="group" aria-label="Brushes"></div>
@@ -550,7 +600,7 @@
       <button id="prop-delete" type="button" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       <button id="float-more" type="button" title="More" aria-label="More">⋯</button>
     </div>
-    <div id="create-menu" role="menu" hidden></div>
+    <div id="create-menu" role="menu" aria-label="Edit design" tabindex="-1" hidden></div>
     <output id="create-readout" hidden></output>
     <div id="create-whatsnew" role="dialog" aria-labelledby="whatsnew-title" hidden>
       <h3 id="whatsnew-title">What's new</h3>
@@ -619,7 +669,12 @@
   <p>Drag the edge handles to crop, the corner handles to resize the picture, or the picture to reposition it.</p>
   <div><button id="crop-apply" type="button">Apply crop</button> <button id="crop-cancel" type="button">Cancel</button></div>
 </dialog>
-  <footer><span id="keys"></span><span id="version"></span></footer>
+  <dialog id="photo-shortcuts" aria-labelledby="photo-shortcuts-title">
+    <h2 id="photo-shortcuts-title">Photo shortcuts</h2>
+    <ul id="keys"></ul>
+    <form method="dialog" novalidate><button id="photo-shortcuts-close" autofocus>Close</button></form>
+  </dialog>
+  <footer><button id="photo-shortcuts-open" type="button" aria-haspopup="dialog" aria-controls="photo-shortcuts">Shortcuts</button><span id="version"></span></footer>
   <script src="develop.js"></script>
   <script src="app.js"></script>
   <script src="photobar.js"></script>

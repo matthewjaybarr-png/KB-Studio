@@ -1,11 +1,11 @@
-// KB Studio: open a shoot, cull it with the keyboard (ratings in <shoot>/.shootstudio/shoot.json),
+// KB Studio: open a shoot, cull it (ratings in <shoot>/.shootstudio/shoot.json),
 // develop photos (recipes in .shootstudio/recipes/, their rendered look in .shootstudio/edited/).
 const invoke = window.__TAURI__.core.invoke;
 let mode = 'home'; // 'home', 'photos' or 'create'
 const $ = selector => document.querySelector(selector);
 const grid = $('#grid'), loupe = $('#loupe'), develop = $('#develop'), canvas = $('#canvas'), sliders = $('#sliders');
 let dir = null, opening = false, updating = false, photos = [], ratings = {}, recipes = {}, visible = [], cursor = 0, view = 'grid', anchor = null, saving = Promise.resolve();
-const selected = new Set(); // photo ids picked with Ctrl/Shift+click in the grid, for pasting settings onto
+const selected = new Set(); // photo ids selected together in the grid
 let clipboard = null;       // settings copied with Ctrl+C
 let deliverSettings = null; // the shoot's last Deliver choices, saved in shoot.json
 const thumbs = new Map();   // photo id -> blob URL, small, kept for the whole session
@@ -19,10 +19,23 @@ const KEYS = {
   compare: `←→ change the right photo · C one photo · Esc grid · ${CULL_KEYS}`,
   develop: `←→ previous/next · hold \\ for before · Ctrl+Z undo · Ctrl+Shift+Z redo · double-click a slider to reset it · ${COPY_KEYS} · J spot heal · H heal · S clone · B soften · E red eye · L blur · O dodge · I burn · G remove · [ ] brush size · Ctrl+click heal/clone source · R crop · wheel or + - zoom · 0 fit · 1 100% · Z toggle zoom · Space+drag pan · Esc drop tool, then grid`
 };
+const photoShortcuts = $('#photo-shortcuts');
+$('#photo-shortcuts-open').onclick = () => {
+  $('#keys').replaceChildren(...KEYS[view].split(' · ').map(key => {
+    const item = document.createElement('li');
+    item.textContent = key;
+    return item;
+  }));
+  photoShortcuts.showModal();
+};
 
 const fileOf = photo => photo.jpg || photo.raw;
 const rating = photo => ratings[photo.id] || {};
-const status = (text, error = false) => { $('#status').textContent = text; $('#status').classList.toggle('error', error); };
+const status = (text, error = false) => {
+  const line = $('#status');
+  line.textContent = line.title = text;
+  line.classList.toggle('error', error);
+};
 const caption = photo => { const r = rating(photo); return photo.id + (r.stars ? ' ' + '★'.repeat(r.stars) : '') + (photo.jpg && photo.raw ? ' · RAW+JPEG' : photo.raw ? ' · RAW' : '') + (recipes[photo.id] ? ' · Edited' : ''); };
 // An edited photo shows its saved rendered look; anything else shows the camera's own JPEG.
 const previewKey = photo => recipes[photo.id] ? 'edited:' + photo.id : fileOf(photo);
@@ -90,7 +103,10 @@ const watcher = new IntersectionObserver(entries => {
 
 function paintCell(cell, photo) {
   const r = rating(photo);
-  cell.className = 'cell' + (r.flag ? ' ' + r.flag : '') + (visible[cursor] === photo ? ' current' : '') + (selected.has(photo.id) ? ' selected' : '');
+  const current = visible[cursor] === photo;
+  cell.className = 'cell' + (r.flag ? ' ' + r.flag : '') + (current ? ' current' : '');
+  cell.querySelector('.cell-select').tabIndex = current ? 0 : -1;
+  paintCellSelection(cell);
   cell.querySelector('figcaption').textContent = caption(photo);
   cellRating(cell, photo);
 }
@@ -108,7 +124,9 @@ function renderGrid() {
     const cell = document.createElement('figure');
     cell.dataset.i = i;
     cell.dataset.id = photo.id;
-    cell.innerHTML = '<img alt="" loading="lazy" decoding="async"><figcaption></figcaption>' + CELL_RATE;
+    cell.innerHTML = '<img alt="" loading="lazy" decoding="async"><figcaption></figcaption>' + CELL_RATE
+      + '<button type="button" class="cell-select" title="Select or deselect this photo"></button>';
+    cell.lastElementChild.setAttribute('aria-label', `Select ${photo.id}`);
     if (thumbs.has(photo.id)) cell.firstChild.src = thumbs.get(photo.id);
     paintCell(cell, photo);
     watcher.observe(cell);
@@ -131,7 +149,6 @@ async function showViewer() {
   grid.classList.toggle('hidden', view !== 'grid');
   develop.classList.toggle('hidden', view !== 'develop');
   loupe.classList.toggle('compare', view === 'compare');
-  $('#keys').textContent = KEYS[view];
   if (typeof paintPhotoBar === "function") paintPhotoBar();
   if (view === 'develop') return openDevelop(visible[cursor]);
   leaveDevelop();
@@ -165,9 +182,15 @@ async function showViewer() {
 function move(to) {
   if (!visible.length) return;
   const old = grid.querySelector('.current');
+  const previousButton = old?.querySelector('.cell-select');
   cursor = Math.max(0, Math.min(to, visible.length - 1));
   old?.classList.remove('current');
-  grid.children[cursor]?.classList.add('current');
+  if (previousButton) previousButton.tabIndex = -1;
+  const current = grid.children[cursor];
+  current.classList.add('current');
+  const button = current.querySelector('.cell-select');
+  button.tabIndex = 0;
+  if (document.activeElement === previousButton && button !== previousButton) button.focus({ preventScroll: true });
   showViewer();
 }
 
@@ -216,22 +239,23 @@ for (const s of SLIDERS) {
   for (const l of LOOKS) { group = l.group || group; $(`#look optgroup[label="${group}"]`).append(new Option(l.name, l.id)); }
 }
 const ASPECTS = ['Original', 'Free', '1:1', '4:5', '5:7', '2:3', '16:9'];
-sliders.insertAdjacentHTML('beforeend', `<h3>Crop</h3><div class="crop"><button id="crop" type="button"></button>
+sliders.insertAdjacentHTML('beforeend', `<h3>Crop</h3><div class="crop"><button id="crop" type="button" title="Crop (R)"></button>
   <select id="aspect" aria-label="Aspect ratio">${ASPECTS.map(a => `<option>${a}</option>`).join('')}</select><button id="aspect-swap" type="button" title="Swap width and height">Swap</button></div>
   <label><span>Straighten</span><output></output><input type="range" min="${-MAX_ANGLE}" max="${MAX_ANGLE}" step="0.1" value="0" data-crop="angle"></label>
-  <p id="crop-hint"></p><button id="crop-reset" type="button">Reset crop</button>`);
+  <p id="crop-hint"></p><button id="crop-cancel-photo" type="button" hidden>Cancel crop</button><button id="crop-reset" type="button">Reset crop</button>`);
 sliders.insertAdjacentHTML('beforeend', `<h3>Retouch</h3><div class="tools">${Object.entries(TOOLS).map(([key, label]) =>
-  `<button type="button" data-tool="${key}">${label} <kbd>${{ spot: 'J', heal: 'H', clone: 'S', soften: 'B', redeye: 'E', blur: 'L', dodge: 'O', burn: 'I', remove: 'G' }[key]}</kbd></button>`).join('')}</div>
+  `<button type="button" data-tool="${key}">${label}</button>`).join('')}</div>
+  <button id="develop-source" type="button" aria-pressed="false" hidden>Choose source</button>
   <label><span>Brush size</span><output></output><input type="range" min="0" max="100" step="1" data-brush="size"></label>
   <label id="strength"><span>Strength</span><output></output><input type="range" min="0" max="100" step="1" data-brush="strength"></label>
   <label id="aligned"><span>Aligned (keep the source distance)</span><input type="checkbox" checked></label>
-  <p id="tool-hint"></p>`);
+  <p id="tool-hint" role="status"></p><button id="develop-retouch-done" type="button" hidden>Done retouching</button>`);
 sliders.insertAdjacentHTML('beforeend', '<button id="reset" type="button">Reset all</button>');
 
 const HINTS = {
   spot: 'Paint over a spot; KB Studio finds clean skin nearby to blend in. Wrinkles: spot heal at 100% removes, 40-60% softens.',
-  heal: 'Alt+click (or Ctrl+click) a clean area, then paint. The circle shows what is copied. Its texture is blended into the colour around the stroke.',
-  clone: 'Alt+click (or Ctrl+click) a source, then paint. Exact copy, no blending. For skin, use Heal.',
+  heal: 'Choose a clean area, then paint to blend its texture into the photo.',
+  clone: 'Choose a source, then paint to copy it exactly. For skin, use Heal.',
   soften: 'Paint over skin to smooth blotches while keeping pores and fine detail. A small brush reaches wrinkles; 40-60% softens them.',
   redeye: 'Click a red pupil, or drag out a circle over the eye. Only strongly red pixels darken; the white catchlight stays.',
   blur: 'Paint to blur the area, such as a busy background. Strength mixes the blur in; a bigger brush blurs more.',
@@ -249,8 +273,14 @@ function paintTools() {
   strength.previousElementSibling.textContent = strength.value + '%';
   $('#strength').hidden = !tool || tool === 'remove';
   $('#aligned').hidden = !COPIES[tool];
-  $('#tool-hint').textContent = tool ? HINTS[tool] : 'Pick a tool to paint fixes onto the photo.';
-  stage.classList.toggle('brush', !!tool);
+  const source = $('#develop-source'), picking = !!editing?.pickingSource;
+  source.hidden = !COPIES[tool];
+  source.setAttribute('aria-pressed', picking);
+  source.textContent = picking ? 'Cancel choosing source' : editing?.from ? 'Choose a new source' : 'Choose source';
+  $('#tool-hint').textContent = picking ? 'Click the part of the photo you want to copy from.' : HINTS[tool] || 'Pick a tool to paint fixes onto the photo.';
+  $('#develop-retouch-done').hidden = !tool;
+  stage.classList.toggle('brush', !!tool && !picking);
+  stage.classList.toggle('picking-source', picking);
 }
 
 function paintSliders() {
@@ -268,8 +298,10 @@ function paintSliders() {
   angle.value = crop.angle;
   angle.previousElementSibling.textContent = (crop.angle > 0 ? '+' : '') + crop.angle.toFixed(1) + '°';
   $('#aspect').value = aspect;
-  $('#crop').innerHTML = cropping ? 'Apply <kbd>Enter</kbd>' : 'Crop <kbd>R</kbd>';
-  $('#crop-hint').textContent = cropping ? 'Drag a corner or edge to crop, inside to move. Enter or R applies, Esc cancels.' : 'Crop and straighten; the original file is never changed.';
+  $('#crop').textContent = cropping ? 'Apply crop' : 'Crop';
+  $('#crop').title = cropping ? 'Apply crop (Enter)' : 'Crop (R)';
+  $('#crop-cancel-photo').hidden = !cropping;
+  $('#crop-hint').textContent = cropping ? 'Drag a corner or edge to crop. Drag inside to move the crop.' : 'Crop and straighten; the original file is never changed.';
   stage.classList.toggle('cropping', !!cropping);
 }
 
@@ -339,7 +371,7 @@ function paintOverlay() {
   const e = editing, place = e?.ready && developer.placement();
   paintZoom();
   if (cropping && place) return paintCrop(g);
-  if (!tool || !place) return;
+  if (!tool || !place || e.pickingSource) return;
   const ring = (x, y, r) => {
     for (const [colour, width] of [['rgba(0,0,0,.6)', 3], ['#fff', 1]]) { g.strokeStyle = colour; g.lineWidth = width; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke(); }
   };
@@ -439,6 +471,7 @@ function startCrop() {
   const e = editing;
   if (cropping || !e?.ready || updating) return cropping;
   tool = stroke = null;
+  e.pickingSource = false;
   cropping = { e, crop: e.recipe.crop, ratio: ratioOf(aspect, e.recipe.crop) };
   // A fresh crop takes the chosen shape; an existing one that doesn't match it is free.
   if (cropping.ratio && sameCrop(cropping.crop, NO_CROP)) cropping.crop = reshape(cropping.crop, cropping.ratio);
@@ -474,6 +507,7 @@ function setAngle(angle) {
   paintSliders(); draw();
 }
 $('#crop').onclick = () => { $('#crop').blur(); toggleCrop(); };
+$('#crop-cancel-photo').onclick = () => endCrop(false);
 $('#aspect').onchange = () => { $('#aspect').blur(); setAspect($('#aspect').value); };
 $('#aspect-swap').onclick = () => {
   $('#aspect-swap').blur();
@@ -560,7 +594,7 @@ async function openDevelop(photo) {
   if (!photo) return note('');
   try { developer ||= new Developer(canvas); } catch (error) { return note(`Develop isn't available: ${error.message}. Culling still works.`); }
   // The RAW when there is one; retouch strokes are replayed onto the same file they were painted on.
-  const e = editing = { photo, shoot: dir, source: photo.raw || photo.jpg, recipe: fullRecipe(recipes[photo.id]), history: [], future: [], ready: false, dirty: false, from: null, offset: null };
+  const e = editing = { photo, shoot: dir, source: photo.raw || photo.jpg, recipe: fullRecipe(recipes[photo.id]), history: [], future: [], ready: false, dirty: false, from: null, offset: null, pickingSource: false };
   dragStart = stroke = panning = null;
   developer.clear(); paintSliders(); draw();
   note(photo.raw ? 'Developing the RAW file…' : 'Loading…');
@@ -734,8 +768,15 @@ function pickTool(next) {
   if (cropping) return;
   tool = next;
   stroke = null;
+  if (editing) editing.pickingSource = false;
   paintTools(); draw();
 }
+$('#develop-source').onclick = () => {
+  if (!editing?.ready || !COPIES[tool]) return;
+  editing.pickingSource = !editing.pickingSource;
+  paintTools(); draw();
+};
+$('#develop-retouch-done').onclick = () => pickTool(null);
 
 // Painting: points are kept every quarter brush width; Rust fills the dabs in between.
 const capture = event => { try { stage.setPointerCapture(event.pointerId); } catch {} }; // keeps the drag when the pointer leaves the photo
@@ -757,8 +798,15 @@ stage.addEventListener('pointerdown', event => {
   const at = developer.toImage(event.clientX, event.clientY);
   if (event.button !== 0 || !tool || !inside(at) || !inside(developer.toView(event.clientX, event.clientY))) return;
   if (tool === 'redeye') { stroke = { e, tool, size: brush.size, strength: strengthOf(tool), points: [at.map(round)] }; capture(event); return draw(); }
-  if (COPIES[tool] && (event.altKey || event.ctrlKey || event.metaKey)) { e.from = at; e.offset = null; return draw(); }
-  if (COPIES[tool] && !e.from) return status('Alt+click where to copy from first.');
+  if (COPIES[tool] && (e.pickingSource || event.altKey || event.ctrlKey || event.metaKey)) {
+    e.from = at;
+    e.offset = null;
+    e.pickingSource = false;
+    status('Source chosen');
+    paintTools(); draw();
+    return;
+  }
+  if (COPIES[tool] && !e.from) return status('Click Choose source, or Alt+click the photo.');
   // The stroke copies from the source at that distance from the brush; Aligned keeps the distance for the next stroke too.
   if (COPIES[tool] && !e.offset) e.offset = [round(e.from[0] - at[0]), round(e.from[1] - at[1])];
   stroke = { e, tool, size: brush.size, strength: strengthOf(tool), points: [at.map(round)] };
@@ -1045,7 +1093,6 @@ $('#update-now').onclick = async () => {
     paintSliders();
   }
 };
-$('#keys').textContent = KEYS.grid;
 invoke('app_version').then(version => { $('#version').textContent = 'KB Studio ' + version; }, () => {});
 checkForUpdate();
 
@@ -1053,14 +1100,16 @@ $('#open').onclick = async () => { const path = await invoke('pick_shoot'); if (
 // After every script has loaded: setMode is defined in create.js, which comes later.
 addEventListener('DOMContentLoaded', () => invoke('startup_shoot').then(path => { if (path) { setMode('photos'); openShoot(path); } else setMode('home'); }));
 $('#filter').onchange = () => { renderGrid(); showViewer(); $('#filter').blur(); grid.focus(); };
-// Ctrl+click adds or removes a photo from the selection, Shift+click adds the run from the current photo.
+// The checkboxes toggle individual photos. Ctrl+click and Shift+click also select photos in the grid.
 grid.onclick = event => {
   const cell = event.target.closest('.cell');
   if (!cell) return;
   const rater = event.target.closest('.cell-rate button');
   if (rater) return rateCell(rater);
   const i = +cell.dataset.i, id = visible[i].id;
-  if (event.shiftKey) for (let j = Math.min(i, cursor); j <= Math.max(i, cursor); j++) selected.add(visible[j].id);
+  if (event.target.closest('.cell-select')) {
+    if (selected.has(id)) selected.delete(id); else selected.add(id);
+  } else if (event.shiftKey) for (let j = Math.min(i, cursor); j <= Math.max(i, cursor); j++) selected.add(visible[j].id);
   else if (event.ctrlKey || event.metaKey) {
     if (!selected.size && visible[cursor]) selected.add(visible[cursor].id);
     if (selected.has(id) && i !== cursor) selected.delete(id); else selected.add(id);
@@ -1068,20 +1117,35 @@ grid.onclick = event => {
   move(i);
   paintSelection();
 };
+function paintCellSelection(cell) {
+  const checked = selected.has(cell.dataset.id);
+  cell.classList.toggle('selected', checked);
+  cell.querySelector('.cell-select').setAttribute('aria-pressed', checked);
+}
 function paintSelection() {
-  for (const cell of grid.querySelectorAll('.cell')) cell.classList.toggle('selected', selected.has(cell.dataset.id));
+  for (const cell of grid.querySelectorAll('.cell')) paintCellSelection(cell);
   counts();
 }
-grid.ondblclick = event => { if (event.target.closest('.cell') && !event.target.closest('.cell-rate')) { view = 'loupe'; showViewer(); } };
+function selectAllPhotos() {
+  for (const photo of visible) selected.add(photo.id);
+  paintSelection();
+}
+function clearPhotoSelection() {
+  selected.clear();
+  paintSelection();
+}
+grid.ondblclick = event => { if (event.target.closest('.cell') && !event.target.closest('.cell-rate,.cell-select')) { view = 'loupe'; showViewer(); } };
 
 document.addEventListener('keydown', event => {
   if (mode !== 'photos') return;
   const target = event.target;
-  if ($('#deliver').open) return; // the dialog has its own keys
+  if ($('#deliver').open || photoShortcuts.open) return; // dialogs have their own keys
   if (target.matches('input[type=range]')) {
     if (event.key === 'Escape') { event.preventDefault(); return target.blur(); }
     if (/^(Arrow|Page|Home|End)/.test(event.key)) return; // a focused slider keeps its own keys
-  } else if (target.matches('select, input, button')) return;
+  } else if (target.matches('select, input, button')) {
+    if (!target.matches('.cell-select, #photo-shortcuts-open') || event.key === 'Enter' || event.key === ' ') return;
+  }
   if (event.altKey || !dir || opening || updating) return;
   if (view === 'develop' && event.key === ' ') { event.preventDefault(); spaceHeld = true; return; } // hold to pan
   if (event.ctrlKey || event.metaKey) {
@@ -1089,7 +1153,7 @@ document.addEventListener('keydown', event => {
     const ctrl = {
       ...view === 'develop' && !cropping && { z: () => undo(letter === 'y' || event.shiftKey), y: () => undo(true) },
       c: copySettings, v: pasteSettings, e: openDeliver,
-      ...view === 'grid' && { a: () => { for (const p of visible) selected.add(p.id); paintSelection(); } }
+      ...view === 'grid' && { a: selectAllPhotos }
     };
     if (ctrl[letter]) { event.preventDefault(); ctrl[letter](); }
     return;
@@ -1102,7 +1166,7 @@ document.addEventListener('keydown', event => {
     ArrowDown: () => view === 'grid' ? move(cursor + columns) : move(cursor + 1),
     Enter: () => { if (cropping) return endCrop(true); view = view === 'grid' ? 'loupe' : 'grid'; showViewer(); },
     ' ': () => { view = view === 'grid' ? 'loupe' : 'grid'; showViewer(); },
-    Escape: () => { if (cropping) return endCrop(false); if (view === 'develop' && tool) return pickTool(null); if (view === 'grid' && selected.size) { selected.clear(); return paintSelection(); } view = 'grid'; showViewer(); },
+    Escape: () => { if (cropping) return endCrop(false); if (view === 'develop' && tool) return pickTool(null); if (view === 'grid' && selected.size) return clearPhotoSelection(); view = 'grid'; showViewer(); },
     d: () => { view = 'develop'; showViewer(); },
     '\\': () => { if (view === 'develop' && !before) { before = true; draw(); } },
     ...view === 'develop' && {

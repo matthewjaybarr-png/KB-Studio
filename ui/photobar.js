@@ -1,6 +1,6 @@
 // Photos for the mouse: a view switcher, a bar for rating and Develop's everyday actions, arrows over the photo,
-// a filmstrip, and Develop's settings split into drawers behind a rail, like Create. Every key in app.js has a
-// button here too. Needs app.js and develop.js.
+// a filmstrip, and Develop's settings split into drawers behind a rail, like Create.
+// Needs app.js and develop.js.
 let railSection = 'adjust';
 const forView = el => (el.dataset.for || '').split(' ').includes(view);
 // Buttons keep the keyboard on the photos: a click doesn't move focus to them.
@@ -17,6 +17,7 @@ for (const b of document.querySelectorAll('#views button')) b.onclick = () => se
 const rateWith = b => b.dataset.flag !== undefined ? rate({ flag: b.dataset.flag || null })
   : rate({ stars: rating(visible[cursor]).stars === +b.dataset.stars ? null : +b.dataset.stars }); // the same star again clears
 for (const b of document.querySelectorAll('#photo-bar [data-flag], #photo-bar [data-stars]')) b.onclick = () => rateWith(b);
+$('#pb-clear-stars').onclick = () => rate({ stars: null });
 const holdBefore = $('#pb-before');
 holdBefore.onpointerdown = e => { if (!editing?.ready) return; try { holdBefore.setPointerCapture(e.pointerId); } catch {} before = true; holdBefore.classList.add('on'); draw(); };
 holdBefore.onpointerup = holdBefore.onpointercancel = () => { holdBefore.classList.remove('on'); endBefore(); };
@@ -30,7 +31,8 @@ $('#pb-out').onclick = zoomButton(1 / 1.25);
 $('#pb-in').onclick = zoomButton(1.25);
 $('#pb-copy').onclick = () => copySettings();
 $('#pb-paste').onclick = () => pasteSettings();
-$('#pb-all').onclick = () => { if (selected.size === visible.length) selected.clear(); else for (const p of visible) selected.add(p.id); paintSelection(); };
+$('#pb-all').onclick = selectAllPhotos;
+$('#pb-clear').onclick = clearPhotoSelection;
 
 let barView = null;
 function paintPhotoBar() {
@@ -43,12 +45,14 @@ function paintPhotoBar() {
   $('#photo-bar').hidden = !dir;
   for (const b of document.querySelectorAll('#photo-bar [data-flag]')) { b.classList.toggle('on', open && (r.flag || '') === b.dataset.flag && !!b.dataset.flag); b.disabled = !open; }
   for (const b of document.querySelectorAll('#photo-bar [data-stars]')) { b.classList.toggle('on', open && (r.stars || 0) >= +b.dataset.stars); b.disabled = !open; }
+  $('#pb-clear-stars').disabled = !r.stars;
   $('#pb-undo').disabled = !!cropping || !editing?.history?.length; $('#pb-redo').disabled = !!cropping || !editing?.future?.length;
   for (const id of ['#pb-before', '#pb-fit', '#pb-100', '#pb-out', '#pb-in']) $(id).disabled = !editing?.ready;
   $('#pb-copy').disabled = !open;
   $('#pb-paste').disabled = !open || !clipboard;
   $('#pb-paste').textContent = view === 'grid' && selected.size > 1 ? `Paste settings onto ${selected.size}` : 'Paste settings';
-  $('#pb-all').textContent = visible.length && selected.size === visible.length ? 'Select none' : 'Select all';
+  $('#pb-all').disabled = selected.size === visible.length;
+  $('#pb-clear').disabled = !selected.size;
   for (const b of document.querySelectorAll('.photo-nav')) b.disabled = !photo || (b.classList.contains('prev') ? cursor <= 0 : cursor >= visible.length - 1);
   paintRail(); paintStrip();
 }

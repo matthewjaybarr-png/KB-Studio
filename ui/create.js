@@ -144,7 +144,7 @@ async function paintHome() {
   $('#home-designs').hidden = !all.length && !projects().folders.length;
   starters.replaceChildren(...groupedTemplates(n => templateButton(n, 'starter', 0, () => newDesign(n, 'starter').catch(tell(n))), mine, t => templateButton(t.name, 'mine', t.modified, () => newDesign(t.name, 'mine').catch(tell(t.name)))));
 }
-$('#home-see-all').onclick = () => $('#home-designs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+$('#home-see-all').onclick = () => $('#home-designs').scrollIntoView({ block: 'start' });
 function button(text, onclick, small) {
   const b = document.createElement('button');
   b.type = 'button'; b.textContent = text; b.onclick = onclick;
@@ -1502,10 +1502,17 @@ for (const b of document.querySelectorAll('#create [data-act=lock]')) b.onclick 
 
 // ---- Pop-up panels, the right-click menu and the toolbar that floats above the selection ----
 // Plain positioned elements inside #create, so the update and close freezes cover them too.
-function closeMenus() {
-  const was = !!openPop || !$('#create-menu').hidden;
+let editMenuTrigger = null;
+function closeMenus(restoreFocus = true) {
+  const menu = $('#create-menu'), was = !!openPop || !menu.hidden;
   if (openPop) { openPop.el.hidden = true; openPop.anchor.classList.remove('open'); openPop = null; }
-  $('#create-menu').hidden = true;
+  const trigger = editMenuTrigger;
+  editMenuTrigger = null;
+  if (trigger) {
+    trigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus && menu.contains(document.activeElement)) trigger.focus({ preventScroll: true });
+  }
+  menu.hidden = true;
   return was;
 }
 function togglePop(anchor) {
@@ -1526,10 +1533,10 @@ document.addEventListener('mousedown', e => {
   if (e.button !== 0) return;
   const menu = $('#create-menu');
   if (openPop && !openPop.el.contains(e.target) && !openPop.anchor.contains(e.target)) closeMenus();
-  if (!menu.hidden && !menu.contains(e.target)) menu.hidden = true;
+  if (!menu.hidden && !menu.contains(e.target) && !editMenuTrigger?.contains(e.target)) closeMenus();
 });
-addEventListener('resize', closeMenus);
-function openMenu(x, y) {
+addEventListener('resize', () => closeMenus());
+function openMenu(x, y, trigger) {
   if (mode !== 'create' || $('#create').inert || cropSession) return;
   closeMenus();
   const objects = board.getActiveObjects(), active = board.getActiveObject(), locked = objects.some(o => o.kbLocked);
@@ -1555,7 +1562,37 @@ function openMenu(x, y) {
   const r = menu.getBoundingClientRect();
   menu.style.left = Math.max(4, Math.min(x, innerWidth - r.width - 4)) + 'px';
   menu.style.top = Math.max(4, Math.min(y, innerHeight - r.height - 4)) + 'px';
+  if (trigger) {
+    editMenuTrigger = trigger;
+    trigger.setAttribute('aria-expanded', 'true');
+    (menu.querySelector('button:enabled') || menu).focus({ preventScroll: true });
+  }
 }
+$('#create-edit').onclick = event => {
+  const trigger = event.currentTarget;
+  if (editMenuTrigger === trigger) return closeMenus();
+  const r = trigger.getBoundingClientRect();
+  openMenu(r.left, r.bottom + 4, trigger);
+};
+$('#create-menu').onkeydown = event => {
+  if (event.key === 'Tab' && editMenuTrigger) {
+    closeMenus();
+    return;
+  }
+  const directions = ['ArrowUp', 'ArrowDown', 'Home', 'End'];
+  if (!directions.includes(event.key)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const items = [...$('#create-menu').querySelectorAll('button:enabled')];
+  if (!items.length) return;
+  const at = items.indexOf(document.activeElement);
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+    : (at + items.length + (event.key === 'ArrowUp' ? -1 : 1)) % items.length;
+  items[next]?.focus();
+};
+$('#create-menu').addEventListener('focusout', event => {
+  if (editMenuTrigger && event.relatedTarget !== editMenuTrigger && !event.currentTarget.contains(event.relatedTarget)) closeMenus(false);
+});
 $('#float-more').onclick = () => { const r = $('#float-more').getBoundingClientRect(); openMenu(r.left, r.bottom + 4); };
 // Above the selection, or below it when there is no room; hidden while dragging, drawing or cropping.
 function paintFloat() {
@@ -2003,7 +2040,7 @@ document.addEventListener('keydown', event => {
     if (run) { event.preventDefault(); run(); }
   } else if (key === '+' || key === '=' || key === '-') { event.preventDefault(); zoomBoard(board.getZoom() * (key === '-' ? 0.8 : 1.25)); }
   else if (key === '0') { event.preventDefault(); fitBoard(); }
-  else if (key === ' ') { event.preventDefault(); setSpacePan(true); }
+  else if (key === ' ' && !event.target.closest?.('button,summary')) { event.preventDefault(); setSpacePan(true); }
   else if (key === 'delete' || key === 'backspace') { event.preventDefault(); removeSelected(); }
   else if (key === 'escape') { board.discardActiveObject(); board.requestRenderAll(); paintPanel(); }
   else if (key.startsWith('arrow') && active && !board.getActiveObjects().some(o => o.kbLocked)) {

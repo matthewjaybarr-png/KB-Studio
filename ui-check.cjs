@@ -171,6 +171,29 @@ const test = `<script>
     $('#open').click();
     await until(() => grid.querySelectorAll('.cell').length === 500, 'shoot opens with 500 photos');
     step($('#shoot-name').textContent === 'Smith Wedding', 'shoot name shown');
+    step($('#photo-shortcuts-open')?.offsetParent && !$('#photo-shortcuts').open, 'shortcuts are available on demand');
+    const keyOn = (target, key, ctrlKey = false) => target.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey, bubbles: true }));
+    $('#photo-shortcuts-open').focus();
+    $('#photo-shortcuts-open').click();
+    step($('#photo-shortcuts').open && $('#keys').textContent.includes('Ctrl+A'), 'the shortcut guide shows the current view');
+    $('#photo-shortcuts-close').click();
+    step(document.activeElement === $('#photo-shortcuts-open'), 'closing Shortcuts restores focus to its button');
+    keyOn(document.activeElement, 'a', true);
+    step(selected.size === visible.length, 'Ctrl+A works immediately after closing Shortcuts');
+    keyOn(document.activeElement, 'Escape');
+    step(!selected.size, 'Escape clears the selection after closing Shortcuts');
+    const firstSelect = grid.children[0].querySelector('.cell-select'), nextSelect = grid.children[1].querySelector('.cell-select');
+    step(firstSelect?.offsetWidth > 0 && firstSelect.tabIndex === 0 && nextSelect.tabIndex === -1, 'the current photo has a visible, keyboard-reachable selection control');
+    firstSelect.click(); nextSelect.click();
+    step(selected.size === 2 && nextSelect.getAttribute('aria-pressed') === 'true', 'two ordinary clicks select two photos');
+    firstSelect.click();
+    step(selected.size === 1 && firstSelect.getAttribute('aria-pressed') === 'false', 'clicking a selected photo checkbox deselects only that photo');
+    firstSelect.focus();
+    keyOn(firstSelect, 'Escape');
+    step(!selected.size, 'Escape clears the selection while a photo selector holds focus');
+    nextSelect.click();
+    $('#pb-clear').click(); move(0);
+    step(!selected.size && !grid.querySelector('.selected'), 'Clear selection clears a partial selection');
     await until(() => count('save_thumb') > 0 && loading === 0 && !wanted.length, 'visible thumbnails generated ' + $('#status').textContent);
     step(count('preview') < 120, 'thumbnails load lazily, not all 500 at once (' + count('preview') + ')');
     step(calls.some(c => c.command === 'preview' && c.args.name === 'IMG_0000.CR2'), 'raw-only photo previews from its CR2');
@@ -593,6 +616,10 @@ const test = `<script>
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     const overlayAlpha = () => $('#overlay').getContext('2d').getImageData(Math.round(cx - box.left), Math.round(cy - box.top), 1, 1).data[3];
     step(overlayAlpha() === 0, 'with no source there is no preview inside the brush');
+    $('#develop-source').click();
+    step($('#develop-source').getAttribute('aria-pressed') === 'true', 'Choose source arms the next photo click');
+    mouse('pointerdown', cx - 80, cy - 40); mouse('pointerup', cx - 80, cy - 40);
+    step(near(editing.from, zoomed(cx - 80, cy - 40)) && strokes().length === 1 && $('#develop-source').getAttribute('aria-pressed') === 'false', 'an ordinary click chooses a source without painting a stroke');
     mouse('pointerdown', cx - 80, cy - 40, { altKey: true }); mouse('pointerup', cx - 80, cy - 40, { altKey: true });
     mouse('pointermove', cx, cy, { buttons: 0 });
     await until(() => overlayAlpha() === 255, 'Alt+click sets the source and the brush shows what it would copy');
@@ -798,9 +825,9 @@ const test = `<script>
     step(seen('#photo-bar') && $('#views [data-view=grid]').classList.contains('on') && $('#filmstrip').hidden, 'the grid shows the rating bar and no filmstrip');
     step(seen('#pb-all') && seen('#pb-copy') && !seen('#pb-before') && !seen('#pb-fit'), "the grid's bar has Select all and copy, not Develop's buttons");
     $('#pb-all').click();
-    step(selected.size === visible.length && $('#pb-all').textContent === 'Select none', 'Select all selects every photo');
-    $('#pb-all').click();
-    step(selected.size === 0, 'and Select none clears it');
+    step(selected.size === visible.length && $('#pb-all').disabled, 'Select all selects every photo');
+    $('#pb-clear').click();
+    step(selected.size === 0, 'and Clear selection clears it');
 
     grid.children[32].querySelector('.cell-rate [data-stars="3"]').click();
     await until(() => lastSave()?.[visible[32].id]?.stars === 3, 'a star on a photo in the grid rates that photo');
@@ -815,8 +842,8 @@ const test = `<script>
     step($('#photo-bar [data-flag=pick]').classList.contains('on'), 'and lights up');
     barClick('[data-stars="2"]');
     await until(() => lastSave()?.[visible[32].id]?.stars === 2 && $('#photo-bar [data-stars="2"]').classList.contains('on') && !$('#photo-bar [data-stars="3"]').classList.contains('on'), 'two stars on the bar');
-    barClick('[data-flag=""]'); barClick('[data-stars="2"]');
-    await until(() => !lastSave()?.[visible[32].id], 'Unflag and the same star again clear the rating');
+    barClick('[data-flag=""]'); $('#pb-clear-stars').click();
+    await until(() => !lastSave()?.[visible[32].id], 'Unflag and Clear stars clear the rating');
 
     $('#views [data-view=loupe]').click();
     await until(() => view === 'loupe' && !loupe.classList.contains('hidden'), 'Photo shows the photo large');
@@ -834,6 +861,11 @@ const test = `<script>
 
     $('#views [data-view=develop]').click();
     await until(() => view === 'develop' && editing?.ready, 'Develop opens from its button');
+    const beforeStatus = $('#status').textContent, stageTop = stage.getBoundingClientRect().top;
+    const longStatus = 'Could not save to /' + 'Long album folder/'.repeat(60) + 'Lakeside.jpg';
+    status(longStatus, true);
+    step(stage.getBoundingClientRect().top === stageTop && $('#status').title === longStatus, 'a long error remains available without moving the photo');
+    status(beforeStatus);
     step(seen('#pb-before') && seen('#pb-fit') && !seen('#pb-all') && seen('#develop-rail'), "Develop's bar has before, undo and zoom");
     step($('#develop-rail [data-section=adjust]').classList.contains('on') && seen('#sliders input[data-key=exposure]') && !seen('#look') && !seen('#crop') && seen('#reset'), 'the Adjust drawer shows the sliders and nothing else');
     $('#develop-rail [data-section=looks]').click();
@@ -849,6 +881,10 @@ const test = `<script>
     $('#pb-undo').click();
     $('#develop-rail [data-section=crop]').click();
     step(seen('#crop') && !seen('#look'), 'Crop shows the crop tools');
+    $('#crop').click();
+    step(cropping && seen('#crop-cancel-photo'), 'starting a crop reveals Cancel crop');
+    $('#crop-cancel-photo').click();
+    step(!cropping && !seen('#crop-cancel-photo'), 'the crop can be cancelled with the mouse');
     press('j');
     step(tool === 'spot' && $('#develop-rail [data-section=retouch]').classList.contains('on') && seen('#sliders [data-tool=spot]'), 'a brush key opens the Retouch drawer');
     $('#develop-rail [data-section=adjust]').click();
@@ -898,6 +934,13 @@ const test = `<script>
     $('#home-create').click();
     await until(() => mode === 'create' && board && design && $('#create-title').value === 'Untitled', 'Create opens a new design');
     step(design.page === 'letter' && pagePx().join() === '816,1056' && board.getObjects().length === 0 && board.backgroundColor === '#ffffff', 'it is a blank Letter page');
+    $('#create-edit').click();
+    step(!$('#create-menu').hidden && $('#create-edit').getAttribute('aria-expanded') === 'true' && [...document.querySelectorAll('#create-menu button')].some(b => b.textContent.startsWith('Paste')), 'Edit opens the existing canvas actions from the toolbar');
+    press('Escape');
+    step($('#create-menu').hidden && $('#create-edit').getAttribute('aria-expanded') === 'false' && document.activeElement === $('#create-edit'), 'Escape closes Edit and returns focus to its button');
+    $('#create-edit').click();
+    keyOn(document.activeElement, 'Tab');
+    step($('#create-menu').hidden && $('#create-edit').getAttribute('aria-expanded') === 'false', 'Tab dismisses the Edit menu');
     step(816 * board.getZoom() <= board.getWidth() && 1056 * board.getZoom() <= board.getHeight() && Math.abs(2 * board.viewportTransform[4] + 816 * board.getZoom() - board.getWidth()) < 2 && board.getWidth() === Math.floor($('#create-stage').getBoundingClientRect().width), 'the canvas fills the stage and the whole page fits, centred');
     const types = () => board.getObjects().map(o => o.kbName).join();
     $('#add-text').click(); board.getActiveObject().exitEditing?.();
@@ -2973,7 +3016,7 @@ const test = `<script>
           $(button).click(); $('#sheet-key').checked = true; setup?.();
           step($('#sheet-dialog').open, label + ' opens the window');
           $('#sheet-make').click();
-          await until(() => design.title !== before && !$('#sheet-dialog').open, () => label + ': ' + $('#sheet-note').textContent);
+          await until(() => design.title !== before && !navigating && !$('#sheet-dialog').open, () => label + ': ' + $('#sheet-note').textContent);
           step(check(allPages()), () => label + ' makes its pages: ' + allPages().map(p => p.objects.map(o => o.kbName).join(',')).join(' / '));
           if (window.uiDump) for (const [i, page] of allPages().entries()) uiDump.push([label + ' ' + (i + 1), await render(0.75, 'png', 0.92, page)]);
         };
