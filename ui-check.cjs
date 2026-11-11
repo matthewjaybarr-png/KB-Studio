@@ -2850,6 +2850,10 @@ const test = `<script>
       const reshapes = () => calls.filter(c => c.command === 'reshape_picture');
       await settle(setPicture(pic, { kbMask: maskUrl(new Uint8Array(300 * 200).fill(255), 300, 200) }), 'a cut-out mask to carry along');
       const maskBefore = pic.kbMask;
+      // The brush size is in screen pixels, so its reach in the picture depends on how far the board is zoomed out to fit
+      // the window; pin it to a 50-pixel radius in the picture so the far corner is truly outside the stroke.
+      const brushPx = shape.px; shape.px = 50 * board.getZoom() * Math.abs(pic.scaleX || 1);
+      step(Math.abs(shapeRadius(pic) - 50) < 1e-6, () => 'the brush reaches 50 picture pixels: ' + shapeRadius(pic));
       down(220, 200); move(235, 200); move(250, 200);
       const f = shape.grid, mid = shapeAt(f, f.d, 145, 100), far = shapeAt(f, f.d, 10, 10);
       step(shape.preview && mid[0] < -5 && Math.abs(mid[1]) < 1 && !far[0] && !far[1], () => 'Push makes the middle take its colour from behind the stroke, and leaves the rest alone: ' + mid + ' / ' + far);
@@ -2870,6 +2874,7 @@ const test = `<script>
       undoDesign(); await until(() => board.getObjects().find(o => o.kbName === 'Photo reshape')?.getSrc() === src, 'Undo takes the Push back');
       $('#shape-done').click();
       step(drawer !== 'retouch' && !touchMode, 'Done puts Reshape away');
+      shape.px = brushPx;
       board.remove(board.getObjects().find(o => o.kbName === 'Photo reshape')); commitDesign();
     }
     // 0.38: Stretch: content-aware resize through carve_picture; the picture keeps its middle and pixel scale, Undo puts it back.
