@@ -29,13 +29,18 @@ Needs Rust, Node.js, Chromium and Tauri 2 Linux system libraries (README.md, Dev
 
 ## Code map
 
-- `ui/app.js`: photo browsing; `ui/develop.js`: photo editing controls.
-- `ui/create.js`: Create design editor; other `ui/*.js` split out its tools.
+- `ui/app.js`: photo browsing, Develop controls and Deliver; `ui/develop.js`: the WebGL2
+  develop engine (sliders, looks, shaders, zoom); `ui/photobar.js`: view buttons, photo
+  bar, filmstrip and Develop drawers.
+- `ui/create.js`: Create design editor; the other `ui/*.js` split out its tools.
 - `ui/index.html` and `ui/style.css`: shared markup and styles; `ui/vendor/`: bundled libraries.
-- `src-tauri/src/main.rs`: Tauri commands, photo loading, recipes and delivery.
+- `src-tauri/src/main.rs`: Tauri commands, photo loading, recipes and delivery file writes.
 - `src-tauri/src/retouch.rs`, `photocraft*.rs` and `photocraft*/`: image processing.
-- `src-tauri/src/creations.rs`, `pptx.rs`, `backup.rs`: designs, imports and backups.
-- Large files: `main.rs` and `create.js` (~2,200 lines), `app.js` (~1,100),
+- `src-tauri/src/cutout.rs`, `effects.rs`, `faces.rs`, `focus.rs`, `reshape.rs`,
+  `see_through.rs`, `straighten.rs`: Create's photo tools (Cut out, Effects, Faces, Edit photo).
+- `src-tauri/src/creations.rs`, `pptx.rs`, `backup.rs`: designs, imports and backups;
+  `desktop.rs`: AppImage menu entry and dock pin.
+- Large files: `main.rs` and `create.js` (~2,200 lines), `app.js` (~1,200),
   `photocraft_remove.rs` (~1,400), `ui-check.cjs` (~3,300). Locate the symbol first,
   then read a relevant line range with `sed -n 'START,ENDp'`; do not read them whole.
 - `ui-check.cjs` is the UI regression harness; `test-data/` holds synthetic fixtures.
