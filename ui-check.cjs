@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const cp = require('node:child_process');
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'shoot-studio-check-'));
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-studio-check-'));
 const appConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'src-tauri/tauri.conf.json'), 'utf8')).app;
 // WebKitGTK gives the page no readable file for a drop from the file manager, so Tauri catches file drops and main.rs
 // hands their paths to kbDropFiles; drags within the page aren't file drops and still reach the page.
