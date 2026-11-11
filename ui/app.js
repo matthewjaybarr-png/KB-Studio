@@ -1,4 +1,4 @@
-// KB Studio: open a shoot, cull it (ratings in <shoot>/.shootstudio/shoot.json),
+// KB Studio Photos: open a shoot, cull it (ratings in <shoot>/.shootstudio/shoot.json),
 // develop photos (recipes in .shootstudio/recipes/, their rendered look in .shootstudio/edited/).
 const invoke = window.__TAURI__.core.invoke;
 let mode = 'home'; // 'home', 'photos' or 'create'

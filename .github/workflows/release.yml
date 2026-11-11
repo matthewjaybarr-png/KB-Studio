@@ -49,7 +49,7 @@ jobs:
           tauriScript: npx --yes @tauri-apps/cli@2
           args: --bundles appimage
           tagName: ${{ github.ref_name }}
-          releaseName: Shoot Studio __VERSION__
+          releaseName: KB Studio __VERSION__
           releaseBody: See CHANGELOG.md for what changed.
           releaseDraft: false
           prerelease: false

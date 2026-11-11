@@ -1,4 +1,4 @@
-// Shoot Studio backend: list a shoot folder, serve previews and RAW pixels, store ratings and edits.
+// KB Studio backend: Photos (shoot folders, previews, RAW pixels, ratings, edits) and the Create commands.
 // Originals are only ever opened for reading; all writes go to <shoot>/.shootstudio/.
 // The one network call is the update check, made here in Rust; the webview stays offline.
 #[allow(dead_code)] // copied whole; not every function is used yet
@@ -270,10 +270,10 @@ async fn pick_shoot(app: tauri::AppHandle, title: Option<String>) -> Option<Stri
         .map(|p| p.display().to_string())
 }
 
-/// Development and testing: SHOOT_STUDIO_OPEN=<folder> opens that shoot at startup, skipping the picker.
+/// Development and testing: KB_STUDIO_OPEN=<folder> opens that shoot at startup, skipping the picker.
 #[tauri::command]
 fn startup_shoot() -> Option<String> {
-    std::env::var("SHOOT_STUDIO_OPEN")
+    std::env::var("KB_STUDIO_OPEN")
         .ok()
         .filter(|dir| !dir.is_empty())
 }
@@ -325,7 +325,7 @@ fn upgrade(mut data: Value, current: u64, file: &str) -> Result<Value, String> {
     };
     if version > current {
         return Err(format!(
-            "this shoot was saved by a newer Shoot Studio ({file} format {version}); update the app to open it"
+            "this shoot was saved by a newer KB Studio ({file} format {version}); update the app to open it"
         ));
     }
     fields.insert("version".into(), current.into());
@@ -382,7 +382,7 @@ fn photo_linear(dir: &str, name: &str, max_edge: usize) -> Result<(usize, usize,
     } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
         jpeg_linear(&path, max_edge)
     } else {
-        Err(format!("{name} is not a photo Shoot Studio can develop"))
+        Err(format!("{name} is not a photo KB Studio can develop"))
     }
 }
 
@@ -1326,11 +1326,11 @@ fn app_version(app: AppHandle) -> String {
 #[derive(Default)]
 struct PendingUpdate(Mutex<Option<Update>>);
 
-/// Testing: SHOOT_STUDIO_UPDATE_URL=<https latest.json url> checks there instead and accepts a
+/// Testing: KB_STUDIO_UPDATE_URL=<https latest.json url> checks there instead and accepts a
 /// self-signed certificate. The download must still carry a signature from our key.
 fn updater(app: &AppHandle) -> tauri_plugin_updater::Result<Updater> {
     let builder = app.updater_builder();
-    match std::env::var("SHOOT_STUDIO_UPDATE_URL") {
+    match std::env::var("KB_STUDIO_UPDATE_URL") {
         Ok(url) if !url.is_empty() => builder
             .endpoints(vec![url.parse::<tauri::Url>()?])?
             .configure_client(|client| client.danger_accept_invalid_certs(true))
@@ -1493,7 +1493,7 @@ fn main() {
             read_pptx
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Shoot Studio");
+        .expect("error while running KB Studio");
 }
 
 #[cfg(test)]
@@ -1559,7 +1559,7 @@ mod tests {
     }
 
     fn temp_dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("shoot-studio-{tag}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kb-studio-{tag}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -1670,7 +1670,7 @@ mod tests {
         fs::write(&file, newer).unwrap();
         assert!(load_shoot(d.clone())
             .unwrap_err()
-            .contains("newer Shoot Studio"));
+            .contains("newer KB Studio"));
         assert!(save_shoot(d.clone(), serde_json::json!({"version": 99})).is_err());
         assert_eq!(
             fs::read_to_string(&file).unwrap(),
@@ -1805,7 +1805,7 @@ mod tests {
         fs::write(&file, newer).unwrap();
         assert!(load_recipes(d.clone())
             .unwrap_err()
-            .contains("newer Shoot Studio"));
+            .contains("newer KB Studio"));
         assert!(save_recipe(
             d.clone(),
             "IMG_1".into(),
@@ -1846,7 +1846,7 @@ mod tests {
         fs::write(&file, r#"{"version": 5, "sharpen": 40, "sharpenMask": 25, "nrColour": 10, "nrLuma": 15}"#).unwrap();
         assert_eq!(load_recipes(d.clone()).unwrap()["IMG_1"], serde_json::json!({"version": 6, "sharpen": 40, "sharpenMask": 25, "nrColour": 10, "nrLuma": 15}), "a version 5 recipe keeps its Detail settings");
         fs::write(&file, r#"{"version": 7, "retouch": []}"#).unwrap();
-        assert!(load_recipes(d.clone()).unwrap_err().contains("newer Shoot Studio"));
+        assert!(load_recipes(d.clone()).unwrap_err().contains("newer KB Studio"));
         fs::remove_dir_all(dir).unwrap();
     }
 

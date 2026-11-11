@@ -1,10 +1,19 @@
-# Shoot Studio: agent instructions
+# KB Studio: agent instructions
 
-KB Studio (repo name shoot-studio): photo culling and editing, plus Create, a Canva-style design editor with classroom and preschool tools. Create is the main focus.
+KB Studio is a Tauri desktop app with two workspaces: Create, a Canva-style design
+editor with classroom and preschool tools (the main focus), and Photos, for culling
+and editing a photo shoot. Rust in `src-tauri/src`, plain JavaScript in `ui/` with
+no bundler. This repository is public, so keep personal details, real photos and
+local paths out of code, docs and commits.
 
-Shoot Studio is a Tauri photo culling and editing app: Rust in `src-tauri/src`,
-plain JavaScript in `ui/` with no bundler. This repository is public, so keep
-personal details, real photos and local paths out of code, docs and commits.
+## Name
+
+The app was once called Shoot Studio. Use "KB Studio" in anything a person reads.
+These old identifiers stay because installed copies and saved data depend on them:
+- `.shootstudio/` in each shoot folder: existing ratings and edits live there.
+- `identifier` `dev.matt.shoot-studio` in `tauri.conf.json`: the app's settings folder.
+- Cargo package `shoot-studio`: the binary name, window app id and `shoot-studio.desktop` entry.
+- The GitHub repository name, which the updater endpoint uses.
 
 ## Build and checks (from the repository root)
 

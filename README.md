@@ -1,79 +1,15 @@
 # KB Studio
 
-A small desktop app for culling and editing a photo shoot on Linux. Open a folder of Canon CR2 and JPEG files, flip through them, mark picks, rejects and stars with the mouse or the keyboard, adjust, retouch and crop the ones you keep, and deliver them as JPEGs.
+A desktop design and photo app for Linux. The start screen offers two workspaces:
 
-- RAW and JPEG files with the same name are shown as one photo.
-- Your originals are only ever read. Ratings live in `<shoot>/.shootstudio/shoot.json` and edits in `<shoot>/.shootstudio/recipes/`, next to the photos. Delete `.shootstudio` and you're back to the camera files.
-- The app makes no network calls except one update check at launch.
+- **Create**, the main part of the app: a Canva-style design editor with templates, photo tools, and tools for the classroom and preschool (class lists, name tags, worksheets, tracing pages, wall cards). It also opens designs downloaded from Canva.
+- **Photos**: cull and edit a photo shoot. Open a folder of Canon CR2 and JPEG files, mark picks, rejects and stars, adjust, retouch and crop the ones you keep, and deliver them as JPEGs.
 
-Everything works with the mouse: the Grid, Photo, Compare and Develop buttons switch views; the bar above the photos has Pick, Reject, Unflag and the stars, Copy and Paste settings, and in Develop Hold for before, Undo, Redo and zoom. In the grid, pointing at a photo shows a flag and star bar on it. Arrows over the photo and the filmstrip under it move between photos. Develop's settings sit in drawers on the left (Adjust, Looks, Crop, Retouch), and Looks shows each look as a picture of the photo.
-
-Keys: arrows move, Enter opens the loupe, C compares, Esc goes back to the grid, P picks, X rejects, U unflags, 1–5 set stars, 0 clears stars.
-
-Develop: D edits the current photo. ←/→ go to the previous/next photo, hold \ to see it before your edits, Ctrl+Z / Ctrl+Shift+Z undo and redo, double-click a slider to reset it. RAW files are developed from their sensor data; editing needs WebGL2, which any graphics from the last decade provides.
-
-Retouch, in Develop: pick a brush, then paint over what you want gone. Strokes are saved in the recipe and can be undone like any other edit.
-- **G remove**: paint over something (a stray hair, a sign, a person in the background), or draw a ring around it, and it disappears; the gap is filled from what's around it.
-- **J spot heal**: paint over a blemish or dust spot; the app finds clean texture nearby and blends it in to match the light around it.
-- **H heal**: Alt+click (or Ctrl+click) a clean area first, then paint. Like spot heal, but you choose where the texture comes from.
-- **S clone**: Alt+click (or Ctrl+click) a source, then paint an exact copy of it, with no blending.
-- **B soften skin**: paint over skin to even out blotchy colour while keeping pores and fine detail. Strength sets how much.
-- [ and ] change the brush size. Heal and clone show source pixels inside the brush. With Aligned on (the default), the source offset carries between strokes; turn it off to restart each stroke from the chosen source. Strength controls every brush.
-- **E red eye**: click a red pupil, or drag out a circle over the eye. Only strongly red pixels are darkened, so the white catchlight stays.
-- **L blur**, **O dodge**, **I burn**: paint to blur a busy background, lighten (dodge) or darken (burn) by one stop. Dodge and burn start at 25% strength; build them up in light strokes.
-
-Looks, in Develop: pick one from the Look list (black & white, toned such as sepia, or a colour look), then set its strength from 0 to 100%. Every slider still works on top of it. Split toning tints shadows and highlights separately; Finishing adds a vignette (darker or lighter corners), film grain and a faded, matte black.
-
-Detail, in Develop: Sharpen adds definition; Masking limits it to edges. Colour noise and Luminance noise reduce coloured speckles and grain.
-
-Presets save the current settings under a name for every shoot; choose one from the Presets list to apply it, and Ctrl+Z takes it back off. Retouch strokes belong to one photo, so presets and copy/paste leave them alone.
-
-Crop, in Develop: R shows the crop frame. Drag inside it to move it, drag a corner or edge to resize it, pick an aspect ratio (Swap turns it between landscape and portrait) and use Straighten to level a horizon. Enter applies the crop and Esc cancels; Reset crop goes back to the whole photo. Like every edit, the original is untouched.
-
-Deliver: Ctrl+E, or the Deliver… button, saves finished JPEGs for the client: the picks, the selected photos, or everything except rejects. Choose full size or 2048 pixels on the long edge for the web, a JPEG quality, and whether files are named after the client and numbered in shoot order (Smith-Wedding-0001.jpg) or keep their own names. They go to `<shoot>/Delivered/<client>` unless you choose another folder, and a PROOF watermark can be added at the bottom right. Stop finishes the current photo and stops there. Delivering never writes inside `.shootstudio` and never touches the originals.
-
-Copy and paste: Ctrl+C copies a photo's settings and Ctrl+V pastes them, onto the open photo in Develop or onto the selected photos in the grid. Ctrl+click adds a photo to the selection, Shift+click adds a run of photos, Ctrl+A selects them all and Esc clears it.
-- The wheel zooms at the pointer up to 1600%; + and − step, 0 fits the photo and 1 shows 100% (in Develop these two zoom instead of rating), Z toggles between the two; a navigator in the corner shows where you are. Hold Space and drag, or drag with the middle button, to move around. Esc puts the brush down; a second Esc goes back to the grid.
-
-## Install (Zorin OS, Ubuntu and similar)
-
-1. Download `KB.Studio_<version>_amd64.AppImage` from the [latest release](https://github.com/matthewjaybarr-png/shoot-studio/releases/latest).
-2. Move it to `~/Applications/ShootStudio.AppImage` and make it executable: right-click → Properties → Permissions → "Allow executing file as program", or `chmod +x ~/Applications/ShootStudio.AppImage`.
-3. AppImages need FUSE 2. If the app doesn't start, install it: `sudo apt install libfuse2` on Zorin 17 / Ubuntu 22.04, or `sudo apt install libfuse2t64` on Ubuntu 24.04 and later.
-4. Start it once by double-clicking. KB Studio then adds itself to the app menu with its icon, and on Zorin OS and other GNOME desktops pins itself to the taskbar. It pins itself only once: if you unpin it, it stays unpinned. Each update refreshes the menu entry and icon, and if you move the AppImage, the next launch points the entry at the new place.
-
-The AppImage file must belong to the user who runs it, so the app can replace it when it updates.
-
-## Updates
-
-At launch the app checks the latest release. If a newer version exists, a bar offers "Update now"; one click downloads it, checks its signature and restarts into the new version. The app never restarts on its own, and shows nothing when offline. Updates are signed, and the app refuses any file not signed with the release key.
-
-## Development
-
-Needs Rust, Node.js and the [Tauri 2 Linux prerequisites](https://v2.tauri.app/start/prerequisites/#linux).
-
-```sh
-cargo test --release --manifest-path src-tauri/Cargo.toml   # Rust tests
-node ui-check.cjs                                           # UI in headless Chromium (CHROMIUM=... to pick the browser)
-npx @tauri-apps/cli@2 dev                                   # run the app
-```
-
-`live-check.sh` drives the real window on a hidden Hyprland monitor; see the comment at its top.
-
-## Releasing
-
-Release builds come only from CI (`.github/workflows/release.yml`, on Ubuntu 22.04), so they run on Zorin OS 17 and newer.
-
-1. Set the new version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and the application entry in `src-tauri/Cargo.lock`, and add it to `CHANGELOG.md`.
-2. Run the Rust tests and the UI check; both must pass.
-3. Validate a local candidate in the packaged app: cropping and dialog focus, fonts and clip art, native clipboard and file drops, printing, and a representative large design. A local build does not validate signed updates.
-4. Commit, then tag and push: `git tag v0.1.1 && git push origin main v0.1.1`.
-
-CI builds the AppImage, signs it, and publishes a release with `latest.json`, which installed apps check. The workflow needs two repository secrets: `TAURI_SIGNING_PRIVATE_KEY` (the private key file's contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The matching public key is in `tauri.conf.json`. If the private key is lost, installed copies can no longer update and must be reinstalled by hand.
+Everything runs offline; the app makes no network calls except one update check at launch.
 
 ## Create
 
-The start screen offers Create next to Photos: a small Canva-style maker for posters, labels, charts and cards. It is offline too; everything it uses is bundled.
+Create is a small Canva-style maker for posters, labels, charts, cards, classroom pages and preschool worksheets. Everything it uses is bundled, so it works offline.
 
 - The buttons down the left open drawers: **Templates** (pictures of each one, in groups: Preschool, Classroom, Photos and social, and My templates; on a blank page a template fills it, otherwise it opens as a new design), **Elements** (shapes, photo frames, graphics, tables, QR codes), **Text** (heading, subheading, body), **Uploads**, **This shoot** (the shoot open in Photos, picks first, rejects left out, developed with your edits when added), **Draw** (Pen, Marker, Highlighter, Glow pen and an Eraser that rubs out part of a line or whole lines, with colours to click, Thickness and Transparency; the pen is picked up while it's open) and **Layers** (reorder, hide, lock).
 - **Colours ▾** offers the colours already in the design, saved colours and a default palette; with nothing selected it colours the background. Text has effects (Shadow, Lift, Hollow, Outline, Neon) under Effects, and layers drag to reorder.
@@ -114,6 +50,78 @@ The start screen offers Create next to Photos: a small Canva-style maker for pos
 - PDF, PNG and JPEG export are at 300 dpi and go to the `Exports` folder there. Print makes the PDF and opens it in your PDF viewer, which prints it. Tile mode puts two half sheets or four quarter sheets on one Letter page with cut marks. "Preview in B&W" shows a greyscale preview only; the file is still in colour.
 - If a bundled font fails to load, designs remain editable and retain their font choices, but fallback fonts may change layout. Export and Print are blocked. Save and restart KB Studio; reinstall if the warning persists.
 - In Photos, **Use in a design** sends the developed photo (or the selected ones, or the picks) to a new design: a page each, a collage, or photo-booth strips on a 4 × 6.
+
+## Photos
+
+Open a folder of Canon CR2 and JPEG files, flip through them, mark picks, rejects and stars with the mouse or the keyboard, adjust, retouch and crop the ones you keep, and deliver them as JPEGs.
+
+- RAW and JPEG files with the same name are shown as one photo.
+- Your originals are only ever read. Ratings live in `<shoot>/.shootstudio/shoot.json` and edits in `<shoot>/.shootstudio/recipes/`, next to the photos. Delete `.shootstudio` and you're back to the camera files.
+
+Everything works with the mouse: the Grid, Photo, Compare and Develop buttons switch views; the bar above the photos has Pick, Reject, Unflag and the stars, Copy and Paste settings, and in Develop Hold for before, Undo, Redo and zoom. In the grid, pointing at a photo shows a flag and star bar on it. Arrows over the photo and the filmstrip under it move between photos. Develop's settings sit in drawers on the left (Adjust, Looks, Crop, Retouch), and Looks shows each look as a picture of the photo.
+
+Keys: arrows move, Enter opens the loupe, C compares, Esc goes back to the grid, P picks, X rejects, U unflags, 1–5 set stars, 0 clears stars.
+
+Develop: D edits the current photo. ←/→ go to the previous/next photo, hold \ to see it before your edits, Ctrl+Z / Ctrl+Shift+Z undo and redo, double-click a slider to reset it. RAW files are developed from their sensor data; editing needs WebGL2, which any graphics from the last decade provides.
+
+Retouch, in Develop: pick a brush, then paint over what you want gone. Strokes are saved in the recipe and can be undone like any other edit.
+- **G remove**: paint over something (a stray hair, a sign, a person in the background), or draw a ring around it, and it disappears; the gap is filled from what's around it.
+- **J spot heal**: paint over a blemish or dust spot; the app finds clean texture nearby and blends it in to match the light around it.
+- **H heal**: Alt+click (or Ctrl+click) a clean area first, then paint. Like spot heal, but you choose where the texture comes from.
+- **S clone**: Alt+click (or Ctrl+click) a source, then paint an exact copy of it, with no blending.
+- **B soften skin**: paint over skin to even out blotchy colour while keeping pores and fine detail. Strength sets how much.
+- [ and ] change the brush size. Heal and clone show source pixels inside the brush. With Aligned on (the default), the source offset carries between strokes; turn it off to restart each stroke from the chosen source. Strength controls every brush.
+- **E red eye**: click a red pupil, or drag out a circle over the eye. Only strongly red pixels are darkened, so the white catchlight stays.
+- **L blur**, **O dodge**, **I burn**: paint to blur a busy background, lighten (dodge) or darken (burn) by one stop. Dodge and burn start at 25% strength; build them up in light strokes.
+
+Looks, in Develop: pick one from the Look list (black & white, toned such as sepia, or a colour look), then set its strength from 0 to 100%. Every slider still works on top of it. Split toning tints shadows and highlights separately; Finishing adds a vignette (darker or lighter corners), film grain and a faded, matte black.
+
+Detail, in Develop: Sharpen adds definition; Masking limits it to edges. Colour noise and Luminance noise reduce coloured speckles and grain.
+
+Presets save the current settings under a name for every shoot; choose one from the Presets list to apply it, and Ctrl+Z takes it back off. Retouch strokes belong to one photo, so presets and copy/paste leave them alone.
+
+Crop, in Develop: R shows the crop frame. Drag inside it to move it, drag a corner or edge to resize it, pick an aspect ratio (Swap turns it between landscape and portrait) and use Straighten to level a horizon. Enter applies the crop and Esc cancels; Reset crop goes back to the whole photo. Like every edit, the original is untouched.
+
+Deliver: Ctrl+E, or the Deliver… button, saves finished JPEGs for the client: the picks, the selected photos, or everything except rejects. Choose full size or 2048 pixels on the long edge for the web, a JPEG quality, and whether files are named after the client and numbered in shoot order (Smith-Wedding-0001.jpg) or keep their own names. They go to `<shoot>/Delivered/<client>` unless you choose another folder, and a PROOF watermark can be added at the bottom right. Stop finishes the current photo and stops there. Delivering never writes inside `.shootstudio` and never touches the originals.
+
+Copy and paste: Ctrl+C copies a photo's settings and Ctrl+V pastes them, onto the open photo in Develop or onto the selected photos in the grid. Ctrl+click adds a photo to the selection, Shift+click adds a run of photos, Ctrl+A selects them all and Esc clears it.
+- The wheel zooms at the pointer up to 1600%; + and − step, 0 fits the photo and 1 shows 100% (in Develop these two zoom instead of rating), Z toggles between the two; a navigator in the corner shows where you are. Hold Space and drag, or drag with the middle button, to move around. Esc puts the brush down; a second Esc goes back to the grid.
+
+## Install (Zorin OS, Ubuntu and similar)
+
+1. Download `KB.Studio_<version>_amd64.AppImage` from the [latest release](https://github.com/matthewjaybarr-png/shoot-studio/releases/latest).
+2. Move it to `~/Applications/KB-Studio.AppImage` and make it executable: right-click → Properties → Permissions → "Allow executing file as program", or `chmod +x ~/Applications/KB-Studio.AppImage`.
+3. AppImages need FUSE 2. If the app doesn't start, install it: `sudo apt install libfuse2` on Zorin 17 / Ubuntu 22.04, or `sudo apt install libfuse2t64` on Ubuntu 24.04 and later.
+4. Start it once by double-clicking. KB Studio then adds itself to the app menu with its icon, and on Zorin OS and other GNOME desktops pins itself to the taskbar. It pins itself only once: if you unpin it, it stays unpinned. Each update refreshes the menu entry and icon, and if you move the AppImage, the next launch points the entry at the new place.
+
+The AppImage file must belong to the user who runs it, so the app can replace it when it updates.
+
+## Updates
+
+At launch the app checks the latest release. If a newer version exists, a bar offers "Update now"; one click downloads it, checks its signature and restarts into the new version. The app never restarts on its own, and shows nothing when offline. Updates are signed, and the app refuses any file not signed with the release key.
+
+## Development
+
+Needs Rust, Node.js and the [Tauri 2 Linux prerequisites](https://v2.tauri.app/start/prerequisites/#linux).
+
+```sh
+cargo test --release --manifest-path src-tauri/Cargo.toml   # Rust tests
+node ui-check.cjs                                           # UI in headless Chromium (CHROMIUM=... to pick the browser)
+npx @tauri-apps/cli@2 dev                                   # run the app
+```
+
+`live-check.sh` drives the real window on a hidden Hyprland monitor; see the comment at its top.
+
+## Releasing
+
+Release builds come only from CI (`.github/workflows/release.yml`, on Ubuntu 22.04), so they run on Zorin OS 17 and newer.
+
+1. Set the new version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and the application entry in `src-tauri/Cargo.lock`, and add it to `CHANGELOG.md`.
+2. Run the Rust tests and the UI check; both must pass.
+3. Validate a local candidate in the packaged app: cropping and dialog focus, fonts and clip art, native clipboard and file drops, printing, and a representative large design. A local build does not validate signed updates.
+4. Commit, then tag and push: `git tag v0.1.1 && git push origin main v0.1.1`.
+
+CI builds the AppImage, signs it, and publishes a release with `latest.json`, which installed apps check. The workflow needs two repository secrets: `TAURI_SIGNING_PRIVATE_KEY` (the private key file's contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The matching public key is in `tauri.conf.json`. If the private key is lost, installed copies can no longer update and must be reinstalled by hand.
 
 ## Licence notices
 

@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn exec_paths_are_quoted_for_the_desktop_spec() {
-        assert_eq!(exec_quote("/home/k/Applications/ShootStudio.AppImage"), "\"/home/k/Applications/ShootStudio.AppImage\"");
+        assert_eq!(exec_quote("/home/k/Applications/KB-Studio.AppImage"), "\"/home/k/Applications/KB-Studio.AppImage\"");
         assert_eq!(exec_quote("/home/k/My Apps/a\"b$c`d\\e%f"), "\"/home/k/My Apps/a\\\"b\\$c\\`d\\\\e%%f\"");
         assert!(entry("/x/KB.AppImage").contains("\nExec=\"/x/KB.AppImage\"\n"));
         assert!(entry("/x").contains("\nStartupWMClass=shoot-studio\n"));
