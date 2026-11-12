@@ -17,7 +17,7 @@ const KEYS = {
   grid: `←→↑↓ move · Enter loupe · D develop · C compare · ${CULL_KEYS} · Ctrl/Shift+click select · Ctrl+A select all · ${COPY_KEYS} (onto the selection)`,
   loupe: `←→ move · Enter or Esc grid · D develop · C compare · ${CULL_KEYS} · ${COPY_KEYS}`,
   compare: `←→ change the right photo · C one photo · Esc grid · ${CULL_KEYS}`,
-  develop: `←→ previous/next · hold \\ for before · Ctrl+Z undo · Ctrl+Shift+Z redo · double-click a slider to reset it · ${COPY_KEYS} · J spot heal · H heal · S clone · B soften · E red eye · L blur · O dodge · I burn · G remove · [ ] brush size · Ctrl+click heal/clone source · R crop · wheel or + - zoom · 0 fit · 1 100% · Z toggle zoom · Space+drag pan · Esc drop tool, then grid`
+  develop: `←→ previous/next · hold \\ for before · Ctrl+Z undo · Ctrl+Shift+Z redo · double-click a slider to reset it · ${COPY_KEYS} · J spot heal · H heal · S clone · B soften · E red eye · L blur · O dodge · I burn · G remove · [ ] brush size · Choose source or Alt/Ctrl+click for the heal/clone source · R crop · wheel or + - zoom · 0 fit · 1 100% · Z toggle zoom · Space+drag pan · Esc drop tool, then grid`
 };
 const photoShortcuts = $('#photo-shortcuts');
 $('#photo-shortcuts-open').onclick = () => {
@@ -36,6 +36,10 @@ const status = (text, error = false) => {
   line.textContent = line.title = text;
   line.classList.toggle('error', error);
 };
+// What a failed save left only in memory ('shoot' for the ratings, else a photo id); closing warns while any remain.
+const unsaved = new Set();
+const landed = key => () => { unsaved.delete(key); status('Saved'); };
+const lost = key => error => { unsaved.add(key); status('Not saved: ' + error, true); };
 const caption = photo => { const r = rating(photo); return photo.id + (r.stars ? ' ' + '★'.repeat(r.stars) : '') + (photo.jpg && photo.raw ? ' · RAW+JPEG' : photo.raw ? ' · RAW' : '') + (recipes[photo.id] ? ' · Edited' : ''); };
 // An edited photo shows its saved rendered look; anything else shows the camera's own JPEG.
 const previewKey = photo => recipes[photo.id] ? 'edited:' + photo.id : fileOf(photo);
@@ -210,7 +214,7 @@ const queue = step => { const run = retouching.then(step); retouching = run.catc
 
 // Retouch brushes. Size is the brush radius over the photo's long edge, on a log slider.
 let tool = null, brush = { size: 0.01 }, strengths = { soften: 0.5, dodge: 0.25, burn: 0.25 }, aligned = true, stroke = null, panning = null, spaceHeld = false, pointer = null;
-const COPIES = { heal: true, clone: true }; // tools that copy from a source you Alt+click or Ctrl+click
+const COPIES = { heal: true, clone: true }; // tools that copy from a source picked with Choose source, Alt+click or Ctrl+click
 const strengthOf = t => strengths[t] ?? 1; // soften starts at half, dodge and burn at a quarter; the rest at all of it
 const sizeToSlider = size => Math.round(100 * Math.log(size / STROKE_LIMITS.minSize) / Math.log(100));
 const sliderToSize = v => STROKE_LIMITS.minSize * 100 ** (v / 100);
@@ -643,7 +647,7 @@ function undo(redo) {
 function store(e) {
   const { photo, shoot } = e, recipe = isDefault(e.recipe) ? null : { version: RECIPE_VERSION, ...e.recipe };
   if (recipe) recipes[photo.id] = recipe; else delete recipes[photo.id];
-  saving = saving.then(() => invoke('save_recipe', { dir: shoot, id: photo.id, recipe })).then(() => status('Saved'), error => status('Not saved: ' + error, true));
+  saving = saving.then(() => invoke('save_recipe', { dir: shoot, id: photo.id, recipe })).then(landed(photo.id), lost(photo.id));
   if (e.sent !== e.recipe.retouch) {
     const strokes = e.sent = e.recipe.retouch;
     queue(async () => {
@@ -715,7 +719,7 @@ async function pasteSettings() {
   const looks = list.map(photo => {
     const next = fullRecipe({ ...recipes[photo.id], ...clipboard }), recipe = isDefault(next) ? null : { version: RECIPE_VERSION, ...next };
     if (recipe) recipes[photo.id] = recipe; else delete recipes[photo.id];
-    saving = saving.then(() => invoke('save_recipe', { dir: shoot, id: photo.id, recipe })).catch(error => status('Not saved: ' + error, true));
+    saving = saving.then(() => invoke('save_recipe', { dir: shoot, id: photo.id, recipe })).then(() => { unsaved.delete(photo.id); }, lost(photo.id));
     repaintCell(photo);
     return writeLook(photo, shoot, async () => {
       status(`Pasting… ${++done} of ${list.length}`);
@@ -867,7 +871,7 @@ async function finishStroke() {
 // shoot.json: ratings and the Deliver choices. Saves are chained so the last change always lands last.
 function saveShoot() {
   const data = { version: 1, ratings: { ...ratings }, ...deliverSettings && { deliver: deliverSettings } }, shoot = dir;
-  saving = saving.then(() => invoke('save_shoot', { dir: shoot, data })).then(() => status('Saved'), error => status('Not saved: ' + error, true));
+  saving = saving.then(() => invoke('save_shoot', { dir: shoot, data })).then(landed('shoot'), lost('shoot'));
 }
 
 function rate(change) {
@@ -896,7 +900,7 @@ async function openShoot(path) {
     thumbs.clear(); previews.clear();
     for (const img of loupe.querySelectorAll('img')) { img.removeAttribute('src'); img.dataset.name = ''; }
     selected.clear();
-    dir = path; photos = list; ratings = saved?.ratings || {}; deliverSettings = saved?.deliver && typeof saved.deliver === 'object' ? saved.deliver : null; recipes = edits; cursor = 0; view = 'grid'; visible = [];
+    unsaved.clear(); dir = path; photos = list; ratings = saved?.ratings || {}; deliverSettings = saved?.deliver && typeof saved.deliver === 'object' ? saved.deliver : null; recipes = edits; cursor = 0; view = 'grid'; visible = [];
     $('#shoot-name').textContent = path.split(/[\\/]/).filter(Boolean).pop();
     status('');
     $('#deliver-open').disabled = false;

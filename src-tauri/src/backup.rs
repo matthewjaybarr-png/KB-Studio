@@ -109,7 +109,10 @@ pub fn back_up(root: &Path, config: &Path, dest: &Path, stamp: &str) -> Result<M
         let _ = fs::remove_file(&temp);
         format!("could not finish the backup: {e}")
     })?;
-    prune(dest, &path);
+    // a backup with no designs in it (their folder unplugged or moved) must not push out ones that have them
+    if files.iter().any(|(name, _)| name.starts_with(DESIGNS)) {
+        prune(dest, &path);
+    }
     Ok(Made { file: path.display().to_string(), files: files.len() })
 }
 
@@ -135,8 +138,13 @@ fn beside(path: &Path) -> PathBuf {
     let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let ext = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
     let dir = path.parent().unwrap_or(Path::new(""));
+    // a long name gives up its end to the suffix, so the result still passes creations::clean
+    let fit = |suffix: String| {
+        let keep = creations::MAX_NAME.saturating_sub(suffix.chars().count());
+        dir.join(format!("{}{suffix}{ext}", stem.chars().take(keep).collect::<String>()))
+    };
     (1..)
-        .map(|n| dir.join(if n == 1 { format!("{stem} (from backup){ext}") } else { format!("{stem} (from backup {n}){ext}") }))
+        .map(|n| fit(if n == 1 { " (from backup)".into() } else { format!(" (from backup {n})") }))
         .find(|p| !p.exists())
         .expect("a free name")
 }
@@ -268,6 +276,36 @@ mod tests {
         assert_eq!(left.len(), KEEP + 1);
         assert_eq!(left[0], "KB Studio backup 2026-10-03 09-00.zip");
         assert!(left.contains(&"holiday.zip".to_string()), "other files are left alone");
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn a_backup_without_designs_removes_no_older_backup() {
+        let (base, root, config, dest) = setup("empty");
+        for day in 1..=KEEP {
+            back_up(&root, &config, &dest, &format!("2026-10-{day:02} 09-00")).unwrap();
+        }
+        fs::remove_dir_all(&root).unwrap();
+        for day in 20..=22 {
+            assert_eq!(back_up(&root, &config, &dest, &format!("2026-10-{day} 09-00")).unwrap().files, 1);
+        }
+        assert!(dest.join("KB Studio backup 2026-10-01 09-00.zip").exists());
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn restore_fits_a_long_name_and_carries_on() {
+        let (base, root, config, dest) = setup("long");
+        let long = "a".repeat(creations::MAX_NAME);
+        fs::write(root.join(format!("{long}.json")), b"1").unwrap();
+        fs::write(root.join("zz last.json"), b"last").unwrap();
+        back_up(&root, &config, &dest, "2026-10-28 09-00").unwrap();
+        fs::write(root.join(format!("{long}.json")), b"2").unwrap();
+        fs::remove_file(root.join("zz last.json")).unwrap();
+        let done = restore(&dest.join("KB Studio backup 2026-10-28 09-00.zip"), &root, &config).unwrap();
+        assert_eq!(done, Restored { restored: 1, beside: 1, same: 2 });
+        assert_eq!(fs::read(root.join(format!("{} (from backup).json", &long[..creations::MAX_NAME - 14]))).unwrap(), b"1");
+        assert_eq!(fs::read(root.join("zz last.json")).unwrap(), b"last");
         fs::remove_dir_all(base).unwrap();
     }
 

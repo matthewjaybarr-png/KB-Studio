@@ -107,6 +107,7 @@ window.__TAURI__ = { core: { Channel: class { onmessage() {} }, invoke: async (c
   if (command === 'install_update') { args.progress.onmessage(42); throw 'signature mismatch'; }
   if (command === 'open_shoot') return Array.from({ length: 500 }, (_, i) => { const id = 'IMG_' + String(i).padStart(4, '0'); return { id, jpg: i % 3 ? id + '.JPG' : null, raw: i % 3 < 2 ? id + '.CR2' : null }; });
   if (command === 'load_shoot') return disk[args.dir] ? JSON.parse(disk[args.dir]) : null;
+  if (command === 'save_shoot' && window.failShoot) throw 'card unplugged';
   if (command === 'save_shoot') { disk[args.dir] = JSON.stringify(args.data); return null; }
   if (command === 'load_presets') return JSON.parse(disk.presets || '[]');
   if (command === 'save_presets') { disk.presets = JSON.stringify(args.presets); return null; }
@@ -1764,6 +1765,17 @@ const test = `<script>
     window.failSave = false;
     put($('#create-title'), 'Closing', 'change');
     await flush();
+    // Ratings that failed to save hold the window open once, and say so in Photos' status line.
+    {
+      const q0 = count('quit');
+      window.failShoot = true; closeTried = false; saveShoot(); await saving;
+      await kbClose();
+      step(count('quit') === q0 && !$('#create').inert && $('#status').textContent.includes('close again'), () => 'a failed ratings save holds the close: ' + $('#status').textContent);
+      window.failShoot = false; closeTried = false; saveShoot(); await saving;
+      await kbClose();
+      step(count('quit') === q0 + 1, 'once the ratings are saved, closing goes through');
+      $('#create').inert = false;
+    }
     $('#home-photos').click();
     move(2);
     // 0.43: the picks as a collage, and as photo strips.

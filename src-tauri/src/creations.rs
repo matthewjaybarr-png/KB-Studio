@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const MAX_NAME: usize = 80;
+pub const MAX_NAME: usize = 80;
 /// Designs hold their images, so allow big files, but not a runaway one.
 pub const MAX_BYTES: usize = 200 * 1024 * 1024;
 
