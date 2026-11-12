@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.52.1
+
+- Restoring a backup no longer stops partway when a design has a very long name.
+- A backup made while the designs folder is missing no longer removes older backups.
+- If photo ratings or edits could not be saved, closing the app now says so first. Close again to quit anyway.
+- After a save failed at closing time, work done afterwards is saved the next time the app closes.
+- Undo and Redo bring guide lines back.
+- Download and Print still work for a design that is too big to save.
+- "Make a page for each name" says why when it could not make the pages.
+- Closing right after a Develop edit keeps the photo's thumbnail up to date.
+- Opening a shoot or a large design keeps the window responsive while files load.
+
 ## 0.52.0
 
 - Start frames the original illustration and uses it as a soft backdrop. A lighter version sits behind the workspace tools and contact sheet. Slightly darker labels make the controls easier to read.
