@@ -1,0 +1,36 @@
+# Every push to main and every pull request: the same checks release.yml runs before it builds, plus lint.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    # Same image as release.yml, so a pass here means the release checks pass too.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Rust tests
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml
+      - name: Lint
+        run: cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: UI check
+        # Headless Chrome's virtual clock makes about 1 run in 20 fail on thumbnail timing; a real failure fails both runs.
+        run: node ui-check.cjs || node ui-check.cjs
+        env:
+          CHROMIUM: google-chrome

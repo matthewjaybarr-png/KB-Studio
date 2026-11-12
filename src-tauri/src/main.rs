@@ -290,7 +290,7 @@ fn open_shoot(dir: String) -> Result<Vec<Photo>, String> {
 }
 
 /// Full preview bytes: the JPEG itself, or the JPEG embedded in a CR2.
-#[tauri::command]
+#[tauri::command(async)] // disk work, kept off the main thread so the window stays live
 fn preview(dir: String, name: String) -> Result<Response, String> {
     let path = shoot_file(&dir, &name)?;
     let bytes = if name.to_ascii_lowercase().ends_with(".cr2") {
@@ -301,14 +301,14 @@ fn preview(dir: String, name: String) -> Result<Response, String> {
     Ok(Response::new(bytes))
 }
 
-#[tauri::command]
+#[tauri::command(async)] // disk work, kept off the main thread so the window stays live
 fn thumb(dir: String, name: String) -> Result<Response, String> {
     fs::read(thumb_path(&dir, &name)?)
         .map(Response::new)
         .map_err(|_| "no thumbnail yet".into())
 }
 
-#[tauri::command]
+#[tauri::command(async)] // disk work, kept off the main thread so the window stays live
 fn save_thumb(dir: String, name: String, data: Vec<u8>) -> Result<(), String> {
     write_atomic(&thumb_path(&dir, &name)?, &data)
 }
@@ -951,7 +951,7 @@ fn edited_path(dir: &str, id: &str, thumb: bool) -> Result<PathBuf, String> {
 }
 
 /// Every saved recipe in the shoot, by photo id.
-#[tauri::command]
+#[tauri::command(async)] // disk work, kept off the main thread so the window stays live
 fn load_recipes(dir: String) -> Result<BTreeMap<String, Value>, String> {
     let folder = state_dir(&dir, Some("recipes"))?;
     let mut recipes = BTreeMap::new();
@@ -1003,7 +1003,7 @@ fn edited(dir: String, id: String, thumb: bool) -> Result<Response, String> {
         .map_err(|_| "no edited preview yet".into())
 }
 
-#[tauri::command]
+#[tauri::command(async)] // disk work, kept off the main thread so the window stays live
 fn save_edited(dir: String, id: String, thumb: bool, data: Vec<u8>) -> Result<(), String> {
     write_atomic(&edited_path(&dir, &id, thumb)?, &data)
 }
@@ -1086,7 +1086,7 @@ fn list_creations(app: AppHandle, kind: String) -> Result<Vec<creations::Entry>,
     Ok(creations::list(&creations::folder(&create_root(&app)?, &kind)?))
 }
 
-#[tauri::command]
+#[tauri::command(async)] // disk work, kept off the main thread so the window stays live
 fn load_creation(app: AppHandle, kind: String, name: String) -> Result<String, String> {
     let bytes = creations::read(&creations::folder(&create_root(&app)?, &kind)?, &name)?;
     String::from_utf8(bytes).map_err(|_| "that design is damaged".into())

@@ -2192,6 +2192,7 @@ let closeTried = false;
 window.kbClose = async () => {
   if (navigating) await navigating.catch(() => {}); // a transition may still be loading or saving its destination
   $('#create').inert = true; // no edits slip in while the save runs
+  if (editing) saveLook(editing); // Develop's look is otherwise saved 2 s after the last edit; this joins `saving`
   // Photos' saves land first; an import finishing meanwhile is still caught. Awaiting the imports is also what yields to the event loop so a decode in flight can finish.
   try { do { await saving; await Promise.allSettled([...adding]); await flush(); } while (dirty || adding.size); if (unsaved.size) throw 0; }
   catch { $('#create').inert = updating; if (!closeTried) { closeTried = true; for (const line of unsaved.size ? ['#status', '#create-saved'] : ['#create-saved']) $(line).textContent += ' — close again to quit anyway'; return; } }
