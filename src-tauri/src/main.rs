@@ -1396,6 +1396,11 @@ fn close_again(first: &std::sync::atomic::AtomicU64) -> bool {
 fn close_again_at(first: &std::sync::atomic::AtomicU64, now: u64) -> bool {
     match first.compare_exchange(0, now, Ordering::Relaxed, Ordering::Relaxed) {
         Ok(_) => false,
+        // Long ago: the page answered then (it warned of a failed save and stayed open), so it gets its chance again.
+        Err(then) if now.saturating_sub(then) >= 120 => {
+            first.store(now, Ordering::Relaxed);
+            false
+        }
         Err(then) => now.saturating_sub(then) >= 10,
     }
 }
@@ -1511,6 +1516,8 @@ mod tests {
         assert!(!close_again_at(&first, 1000), "the first request waits for the page");
         assert!(!close_again_at(&first, 1005), "an impatient second click does not cut a save short");
         assert!(close_again_at(&first, 1010), "a page that never answered can be closed");
+        assert!(!close_again_at(&first, 5000), "a close long after a declined one lets the page save again");
+        assert!(close_again_at(&first, 5010), "and that one can be forced too");
     }
 
     fn photo(id: &str, jpg: Option<&str>, raw: Option<&str>) -> Photo {

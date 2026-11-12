@@ -198,7 +198,7 @@ async function makeBulk() {
     await navigateDesign(async () => { await open(doc, title, null); schedule(); });
     $('#create-saved').textContent = bulkFilling() ? `Made ${pages.length} page${pages.length === 1 ? '' : 's'}, every box filled from your list` : `Made ${pages.length} pages, one for each line of your list`;
   } catch (error) {
-    $('#bulk-count').textContent = 'Could not make them: ' + error;
+    $('#create-saved').textContent = $('#bulk-count').textContent = 'Could not make them: ' + error; // the dialog may have closed already
     $('#bulk-make').disabled = false;
   }
 }

@@ -1762,6 +1762,10 @@ const test = `<script>
     step(count('quit') === quits + 1 && $('#create-saved').textContent.includes('close again'), 'closing with a failed save waits and says so');
     await kbClose();
     step(count('quit') === quits + 2, 'a second close goes through');
+    // Download still works for a design that can't be saved.
+    { const made = Object.keys(window.outputs || {}).length;
+      await output('png');
+      step(Object.keys(window.outputs || {}).length > made, () => 'a design that cannot be saved can still be downloaded: ' + $('#create-saved').textContent); }
     window.failSave = false;
     put($('#create-title'), 'Closing', 'change');
     await flush();
@@ -3235,6 +3239,10 @@ const test = `<script>
       step(JSON.parse(disk['c:designs:' + design.title]).guides?.y?.length === 1, 'guides are saved with the design');
       $('#create-guides-clear').click();
       step(!design.guides.y.length && $('#create-guides-clear').hidden, 'Clear guides removes them all');
+      await undoDesign();
+      step(design.guides.y.length === 1 && !$('#create-guides-clear').hidden, () => 'Undo brings the cleared guides back: ' + JSON.stringify(design.guides));
+      await redoDesign();
+      step(!design.guides.y.length, 'and Redo clears them again');
       $('#create-rulers').click(); step(rulers.top.hidden, 'Rulers again hides them');
       await addPage(); await addPage(); await showPage(0);
       const firstPage = board.toObject(KEEP);

@@ -515,12 +515,14 @@ async function stepHistory(by) {
   restoring = true;
   const doc = JSON.parse(history[to], (k, v) => SHARED_PICTURES.has(k) && v?.kbImage ? historyImages.get(v.kbImage) : v);
   design.page = docPage(doc); design.size = docSize(doc); design.tile = doc.tile; design.copies = doc.copies;
+  if (typeof cleanGuides === 'function') design.guides = cleanGuides(doc.guides);
   designPages = docPages(doc); pageAt = Math.min(doc.at | 0, designPages.length - 1);
   liveThumb = null; await board.loadFromJSON(designPages[pageAt]);
   for (const o of board.getObjects()) applyLock(o);
   restoring = false;
   here = to;
   paintAll(); fitBoard(); schedule();
+  if (typeof drawRulers === 'function') drawRulers(); // the guides and their Clear button, without waiting for the next paint
   if (drawer === 'retouch' && typeof paintTouch === 'function') paintTouch(); // Edit photo's tabs follow the picture Undo brought back
 }
 const undoDesign = () => stepHistory(-1), redoDesign = () => stepHistory(1);
@@ -1935,7 +1937,7 @@ async function makePdf() {
 async function output(kind) {
   const status = $('#create-saved');
   try {
-    await flush();
+    await flush().catch(() => {}); // a design that can't be saved (too big, disk full) can still go out
     const pages = allPages(), many = kind !== 'pdf' && pages.length > 1, files = [];
     status.textContent = 'Making ' + (kind === 'pdf' ? 'the PDF' : many ? 'the pictures' : 'the picture') + '…';
     const save = (bytes, name, ask) => invoke('save_output', bytes, { headers: { name: encodeURIComponent(name), ext: kind === 'jpeg' ? 'jpg' : kind, ask, title: encodeURIComponent(`Choose a folder for the ${pages.length} pictures`) } });
@@ -1971,7 +1973,7 @@ let printPictures = [];
 async function printDesign() {
   const status = $('#create-saved');
   try {
-    await flush();
+    await flush().catch(() => {}); // a design that can't be saved (too big, disk full) can still go out
     status.textContent = 'Getting it ready to print…';
     board.discardActiveObject();
     const layout = pageLayout(design.page, design.tile, design.size), [sw, sh] = layout.sheet, [pw, ph] = design.size;
