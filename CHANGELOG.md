@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.52.2
+
+- Photos added to arch, heart, oval, star and hexagon frames fill the whole frame again, instead of only its lower-right corner. Designs saved with the old problem are fixed when they open.
+
 ## 0.52.1
 
 - Restoring a backup no longer stops partway when a design has a very long name.

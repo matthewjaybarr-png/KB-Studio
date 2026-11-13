@@ -2309,11 +2309,11 @@ const test = `<script>
     const archCanvas = Object.assign(document.createElement('canvas'), { width: 300, height: 200 });
     archCanvas.getContext('2d').fillRect(0, 0, 300, 200);
     const archPhoto = await fillFrame(archFrame, new File([await new Promise(done => archCanvas.toBlob(done, 'image/png'))], 'a.png', { type: 'image/png' }), 'a');
-    step(archPhoto.type === 'image' && archPhoto.clipPath?.kbFrame === 'arch' && Math.abs(archPhoto.getScaledWidth() - archFrame.getScaledWidth()) < 1, 'a photo dropped in it takes the arch shape and size');
+    step(archPhoto.type === 'image' && archPhoto.clipPath?.kbFrame === 'arch' && Math.abs(archPhoto.getScaledWidth() - archFrame.getScaledWidth()) < 1 && archPhoto.clipPath.left === 0 && archPhoto.clipPath.top === 0, 'a photo dropped in it takes the arch shape and size, centred on the photo');
     selectObjects([archPhoto]);
     step($('#prop-frame').value === 'arch', 'the Frame menu shows the arch');
     put($('#prop-frame'), 'heart', 'change');
-    step(archPhoto.clipPath?.kbFrame === 'heart', 'and can change it to a heart');
+    step(archPhoto.clipPath?.kbFrame === 'heart' && archPhoto.clipPath.left === 0 && archPhoto.clipPath.top === 0, 'and can change it to a heart');
     const gridAt = board.getObjects().length;
     $('#add-grid-3').click();
     const gridFrames = board.getObjects().slice(gridAt);
@@ -2323,6 +2323,9 @@ const test = `<script>
     await settle(flush(), 'elements save'); await settle(openDesign(design.title), 'elements reopen');
     const reopenedHeart = board.getObjects().find(o => o.type === 'image');
     step(reopenedHeart.clipPath?.kbFrame === 'heart' && board.getObjects().filter(o => o.kbFrame === 'rect' && o.kbName === 'Grid frame').length === 3, 'frame shapes and grids survive save and reopen');
+    const oldSaved = reopenedHeart.toObject(KEEP); oldSaved.clipPath.left = oldSaved.width / 2; oldSaved.clipPath.top = oldSaved.height / 2;
+    const [repaired] = await fabric.util.enlivenObjects([oldSaved]);
+    step(repaired.clipPath.left === 0 && repaired.clipPath.top === 0, 'a frame clip saved off-centre by older versions is recentred on load');
 
     // 0.21: strikethrough, capitals, lists, curved text, Copy style, and exact size and rotation.
     {

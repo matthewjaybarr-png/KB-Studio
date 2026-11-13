@@ -1229,10 +1229,18 @@ $('#text-effects').replaceChildren(...TEXT_EFFECTS.map(([kind, label]) => {
 $('#prop-highlight-on').onchange = $('#prop-highlight').oninput = highlight;
 function pictureFrame(image, kind) {
   const options = { width: image.width, height: image.height, originX: 'center', originY: 'center' };
-  if (FRAME_NAMES[kind]) return new fabric.Path(framePath(kind, image.width, image.height), { originX: 'center', originY: 'center', kbFrame: kind });
+  // left/top 0: without them a Path places itself at its own bounds, which shifts the clip half off the picture.
+  if (FRAME_NAMES[kind]) return new fabric.Path(framePath(kind, image.width, image.height), { left: 0, top: 0, originX: 'center', originY: 'center', kbFrame: kind });
   return kind === 'none' ? null : kind === 'circle' ? new fabric.Circle({ originX: 'center', originY: 'center', radius: Math.min(image.width, image.height) / 2 }) : new fabric.Rect({ ...options, rx: kind === 'rounded' ? image.width / 8 : 0, ry: kind === 'rounded' ? image.height / 8 : 0 });
 }
 $('#prop-frame').onchange = e => change(o => o.type === 'image' ? { clipPath: pictureFrame(o, e.target.value) } : {});
+// Designs saved before 0.52.2 carry that shifted clip; a frame clip always sits on the picture's centre, so every load recentres it.
+const imageFromObject = fabric.FabricImage.fromObject.bind(fabric.FabricImage);
+fabric.FabricImage.fromObject = async (...args) => {
+  const image = await imageFromObject(...args);
+  if (image.clipPath?.kbFrame) image.clipPath.set({ left: 0, top: 0 });
+  return image;
+};
 
 // ---- A picture's layers: its original, then a filter, adjusted parts, and a mask and fade (photolayers.js) ----
 // A picture with any of them keeps its original in kbOriginal, so every change starts again from the original.
