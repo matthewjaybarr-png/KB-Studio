@@ -18,7 +18,7 @@ function curveArc(o, ctx) {
 }
 const measure = document.createElement('canvas').getContext('2d');
 {
-  const proto = fabric.Textbox.prototype, initDimensions = proto.initDimensions, render = proto._render;
+  const proto = kbe.Textbox.prototype, initDimensions = proto.initDimensions, render = proto._render;
   // A curved text box is as wide as its straight line and as tall as its arc.
   proto.initDimensions = function () {
     initDimensions.call(this);
@@ -108,7 +108,7 @@ let copiedStyle = null;
 function styleOf(o) {
   const keys = o.type === 'textbox' ? TEXT_STYLE : o.type === 'image' ? ['opacity', 'shadow'] : SHAPE_STYLE;
   const style = { from: o.type };
-  for (const k of keys) style[k] = o[k]?.toObject ? new fabric.Shadow(o[k].toObject()) : Array.isArray(o[k]) ? [...o[k]] : o[k];
+  for (const k of keys) style[k] = o[k]?.toObject ? new kbe.Shadow(o[k].toObject()) : Array.isArray(o[k]) ? [...o[k]] : o[k];
   if (o.type === 'textbox') style.kbCurve = o.kbCurve;
   return style;
 }
@@ -116,7 +116,7 @@ function styleOf(o) {
 function pasteStyle(o, style) {
   const same = (style.from === 'textbox') === (o.type === 'textbox') && (style.from === 'image') === (o.type === 'image');
   const keys = same ? Object.keys(style).filter(k => k !== 'from' && k !== 'kbCurve') : ['opacity', 'shadow', ...(o.type !== 'image' && style.from !== 'image' ? ['fill'] : [])];
-  for (const k of keys) if (k in style) o.set(k, style[k]?.toObject ? new fabric.Shadow(style[k].toObject()) : Array.isArray(style[k]) ? [...style[k]] : style[k]);
+  for (const k of keys) if (k in style) o.set(k, style[k]?.toObject ? new kbe.Shadow(style[k].toObject()) : Array.isArray(style[k]) ? [...style[k]] : style[k]);
   if (o.type === 'rect' && !same) o.set({ rx: o.rx, ry: o.ry });
   if (o.type === 'textbox') { if (same) setCurve(o, style.kbCurve); o.initDimensions(); }
   o.dirty = true; o.setCoords();

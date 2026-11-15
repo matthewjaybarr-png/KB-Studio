@@ -30,7 +30,7 @@ $('#link-remove').onclick = () => { const o = board.getActiveObject(); if (o) { 
 // Where each linked thing sits on a page, in page pixels, for the PDF.
 async function linksOf(page) {
   if (!JSON.stringify(page.objects || []).includes('"kbLink"')) return [];
-  const [w, h] = pagePx(), sc = new fabric.StaticCanvas(document.createElement('canvas'), { width: w, height: h });
+  const [w, h] = pagePx(), sc = new kbe.StaticCanvas(document.createElement('canvas'), { width: w, height: h });
   try {
     await sc.loadFromJSON(page);
     return sc.getObjects().filter(o => o.kbLink).map(o => { const r = o.getBoundingRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, url: o.kbLink }; });

@@ -8,9 +8,9 @@ const UNIT = { down: [0, 0, 0, 1], across: [0, 0, 1, 0], diagonal: [0, 0, 1, 1] 
 // Objects use a gradient sized to themselves; the page background needs one in page pixels.
 function makeGradient([a, b], dir, size) {
   const [w, h] = size || [1, 1], colorStops = [{ offset: 0, color: a }, { offset: 1, color: b }], gradientUnits = size ? 'pixels' : 'percentage';
-  if (dir === 'round') return new fabric.Gradient({ type: 'radial', gradientUnits, colorStops, coords: { x1: w / 2, y1: h / 2, r1: 0, x2: w / 2, y2: h / 2, r2: Math.max(w, h) * (size ? 0.71 : 0.5) } });
+  if (dir === 'round') return new kbe.Gradient({ type: 'radial', gradientUnits, colorStops, coords: { x1: w / 2, y1: h / 2, r1: 0, x2: w / 2, y2: h / 2, r2: Math.max(w, h) * (size ? 0.71 : 0.5) } });
   const [x1, y1, x2, y2] = UNIT[dir] || UNIT.down;
-  return new fabric.Gradient({ type: 'linear', gradientUnits, colorStops, coords: { x1: x1 * w, y1: y1 * h, x2: x2 * w, y2: y2 * h } });
+  return new kbe.Gradient({ type: 'linear', gradientUnits, colorStops, coords: { x1: x1 * w, y1: y1 * h, x2: x2 * w, y2: y2 * h } });
 }
 const isGradient = f => !!f?.colorStops;
 // What a gradient is made of, read back from the drawing: its two end colours and its direction.
@@ -57,7 +57,7 @@ function setAsBackground(o = board.getActiveObject()) {
   if (o?.type !== 'image' || o.kbLocked) return;
   const [w, h] = pagePx(), scale = Math.max(w / o.width, h / o.height);
   o.set({ clipPath: undefined, kbFrame: undefined, angle: 0, skewX: 0, skewY: 0, scaleX: scale, scaleY: scale, kbName: 'Background photo', kbLocked: true });
-  o.setPositionByOrigin(new fabric.Point(w / 2, h / 2), 'center', 'center'); o.setCoords();
+  o.setPositionByOrigin(new kbe.Point(w / 2, h / 2), 'center', 'center'); o.setCoords();
   board.sendObjectToBack(o); applyLock(o);
   board.discardActiveObject(); board.requestRenderAll(); commitDesign(); paintPanel();
 }

@@ -90,9 +90,9 @@ $('#bulk-photo-box').onchange = paintBulkPhotos;
 async function bulkPicture(json, file, cache) {
   if (!cache.has(file)) {
     const url = await shrink(file, 1600);
-    cache.set(file, { url, faces: await faceBox(await fabric.FabricImage.fromURL(url)) });
+    cache.set(file, { url, faces: await faceBox(await kbe.FabricImage.fromURL(url)) });
   }
-  const { url, faces } = cache.get(file), [target] = await fabric.util.enlivenObjects([json]), image = await fabric.FabricImage.fromURL(url);
+  const { url, faces } = cache.get(file), [target] = await kbe.util.enlivenObjects([json]), image = await kbe.FabricImage.fromURL(url);
   image.kbName = 'Photo ' + file.name.replace(/\.[^.]*$/, '');
   return fitInFrame(image, target, faces).toObject(KEEP);
 }
@@ -137,7 +137,7 @@ function paintBulkCount() {
 // A text box with new words: one look for all of it (the first letter's), and a single line stays a single line by
 // getting smaller, so a long name still fits its name tag.
 async function refillText(json, text) {
-  const [box] = await fabric.util.enlivenObjects([json]);
+  const [box] = await kbe.util.enlivenObjects([json]);
   const lines = box.textLines?.length || 1, first = Array.isArray(json.styles) ? json.styles[0]?.style : json.styles?.[0]?.[0];
   box.set({ text, styles: {} });
   if (first) box.set(first);

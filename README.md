@@ -124,6 +124,8 @@ Release builds come only from CI (`.github/workflows/release.yml`, on Ubuntu 22.
 
 CI builds the AppImage, signs it, and publishes a release with `latest.json`, which installed apps check. The workflow needs two repository secrets: `TAURI_SIGNING_PRIVATE_KEY` (the private key file's contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The matching public key is in `tauri.conf.json`. If the private key is lost, installed copies can no longer update and must be reinstalled by hand.
 
-## Licence notices
+## Licence
 
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+KB Studio is released under the [MIT License](LICENSE).
+
+Bundled third-party code, fonts and clip art keep their own licences; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

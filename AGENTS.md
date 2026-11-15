@@ -21,6 +21,7 @@ Needs Rust, Node.js, Chromium and Tauri 2 Linux system libraries (README.md, Dev
 - Run: `npx @tauri-apps/cli@2 dev`.
 - Build the local binary: `cargo build --release --manifest-path src-tauri/Cargo.toml`.
 - Rust tests: `cargo test --release --manifest-path src-tauri/Cargo.toml` (matches CI).
+- Own engine (`ui/engine/`, `kbe`) A/B against Fabric 7.4.0, read from git history (tag v0.52.2) by `fabric-ref.cjs`: `node engine-check.cjs`, `node engine-render-check.cjs`, `node engine-text-check.cjs`, interaction (mouse, handles, selection, viewport): `node engine-canvas-check.cjs`, SVG import, pictures, patterns, gradients: `node engine-svg-check.cjs`; text editor behaviour: `node engine-editor-check.cjs`, snapping guides and crop mode: `node engine-extras-check.cjs`, speed: `node engine-perf-check.cjs`, the whole app (templates, generators, saved designs, export) old build against new: `node engine-app-check.cjs` (headless Chromium).
 - UI checks: `node ui-check.cjs` (headless Chromium, mocked Tauri commands;
   set `CHROMIUM` to select the browser; exercises WebGL2 through SwiftShader).
 - Lint: `cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml`.
@@ -33,7 +34,7 @@ Needs Rust, Node.js, Chromium and Tauri 2 Linux system libraries (README.md, Dev
   develop engine (sliders, looks, shaders, zoom); `ui/photobar.js`: view buttons, photo
   bar, filmstrip and Develop drawers.
 - `ui/create.js`: Create design editor; the other `ui/*.js` split out its tools.
-- `ui/index.html` and `ui/style.css`: shared markup and styles; `ui/vendor/`: bundled libraries.
+- `ui/index.html` and `ui/style.css`: shared markup and styles; `ui/engine/`: the own canvas engine (`kbe`, Fabric-shaped: model, render, text, editor, canvas, image, svg, extras); `ui/pdf.js` and `ui/qr.js`: PDF writer and QR code.
 - `src-tauri/src/main.rs`: Tauri commands, photo loading, recipes and delivery file writes.
 - `src-tauri/src/retouch.rs`, `photocraft*.rs` and `photocraft*/`: image processing.
 - `src-tauri/src/cutout.rs`, `effects.rs`, `faces.rs`, `focus.rs`, `reshape.rs`,

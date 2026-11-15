@@ -25,8 +25,8 @@ const INK_CHART = '#3d3a40', GRID = '#e3dde6';
 // The chart as Fabric objects inside a w × h box at 0, 0.
 function chartParts(c) {
   const { w, h } = c, fs = Math.max(10, Math.min(28, Math.min(w, h * 1.4) / 20)), pad = fs * 0.6, out = [];
-  const text = (t, x, y, o = {}) => new fabric.FabricText(String(t), { left: x, top: y, fontSize: fs, fontFamily: 'Lexend', fill: INK_CHART, originX: 'center', originY: 'center', ...o });
-  out.push(new fabric.Rect({ left: 0, top: 0, width: w, height: h, fill: 'rgba(255,255,255,0)', stroke: null, strokeWidth: 0, kbName: 'Chart area' }));
+  const text = (t, x, y, o = {}) => new kbe.FabricText(String(t), { left: x, top: y, fontSize: fs, fontFamily: 'Lexend', fill: INK_CHART, originX: 'center', originY: 'center', ...o });
+  out.push(new kbe.Rect({ left: 0, top: 0, width: w, height: h, fill: 'rgba(255,255,255,0)', stroke: null, strokeWidth: 0, kbName: 'Chart area' }));
   let top = pad;
   if (c.title) { out.push(text(c.title, w / 2, pad + fs * 0.7, { fontSize: fs * 1.25, fontWeight: 'bold' })); top += fs * 1.8; }
   const rows = c.rows, max = niceMax(Math.max(...rows.map(r => r[1])));
@@ -41,13 +41,13 @@ function chartParts(c) {
       if (span <= 0) continue;
       const a1 = a + Math.min(span, Math.PI * 2 - 1e-4), big = span > Math.PI ? 1 : 0, pt = (rr, t) => `${cx + rr * Math.cos(t)} ${cy + rr * Math.sin(t)}`;
       const d = inner ? `M${pt(r, a)} A${r} ${r} 0 ${big} 1 ${pt(r, a1)} L${pt(inner, a1)} A${inner} ${inner} 0 ${big} 0 ${pt(inner, a)}Z` : `M${cx} ${cy} L${pt(r, a)} A${r} ${r} 0 ${big} 1 ${pt(r, a1)}Z`;
-      out.push(new fabric.Path(d, { fill: colour, stroke: '#ffffff', strokeWidth: Math.max(1, fs / 8), kbName: name || 'Slice' }));
+      out.push(new kbe.Path(d, { fill: colour, stroke: '#ffffff', strokeWidth: Math.max(1, fs / 8), kbName: name || 'Slice' }));
       if (c.values && span > 0.35) { const mid = a + span / 2, rr = inner ? (r + inner) / 2 : r * 0.62; out.push(text(Math.round(v / total * 100) + '%', cx + rr * Math.cos(mid), cy + rr * Math.sin(mid), { fill: '#ffffff', fontWeight: 'bold', fontSize: fs * 0.9 })); }
       a += span;
     }
     rows.forEach(([name, , colour], i) => {
       const x = side ? cx + r + pad * 2 : pad + (i % 2) * (w - pad * 2) / 2, y = side ? cy - rows.length * fs * 0.75 + i * fs * 1.5 + fs * 0.75 : cy + r + pad + Math.floor(i / 2) * fs * 1.5 + fs * 0.6;
-      out.push(new fabric.Rect({ left: x, top: y - fs * 0.4, width: fs * 0.8, height: fs * 0.8, rx: fs * 0.15, ry: fs * 0.15, fill: colour, strokeWidth: 0 }));
+      out.push(new kbe.Rect({ left: x, top: y - fs * 0.4, width: fs * 0.8, height: fs * 0.8, rx: fs * 0.15, ry: fs * 0.15, fill: colour, strokeWidth: 0 }));
       out.push(text(short(name, 22), x + fs * 1.2, y, { originX: 'left', fontSize: fs * 0.85 }));
     });
     return out;
@@ -57,39 +57,39 @@ function chartParts(c) {
   const plot = { x: pad + labelW, y: top + (horizontal ? 0 : fs), w: w - pad * 2 - labelW - (horizontal && c.values ? fs * 2 : 0), h: h - top - pad - (horizontal ? fs * 1.6 : fs * 1.8) - (horizontal ? 0 : fs) };
   for (let i = 0; i <= 4; i++) { // the scale: four steps from 0 to the top
     const v = max * i / 4;
-    if (horizontal) { const x = plot.x + plot.w * i / 4; out.push(new fabric.Line([x, plot.y, x, plot.y + plot.h], { stroke: GRID, strokeWidth: 1 }), text(label(v), x, plot.y + plot.h + fs * 0.9, { fontSize: fs * 0.8, fill: '#8a8290' })); }
-    else { const y = plot.y + plot.h - plot.h * i / 4; out.push(new fabric.Line([plot.x, y, plot.x + plot.w, y], { stroke: GRID, strokeWidth: 1 }), text(label(v), plot.x - pad * 0.6, y, { originX: 'right', fontSize: fs * 0.8, fill: '#8a8290' })); }
+    if (horizontal) { const x = plot.x + plot.w * i / 4; out.push(new kbe.Line([x, plot.y, x, plot.y + plot.h], { stroke: GRID, strokeWidth: 1 }), text(label(v), x, plot.y + plot.h + fs * 0.9, { fontSize: fs * 0.8, fill: '#8a8290' })); }
+    else { const y = plot.y + plot.h - plot.h * i / 4; out.push(new kbe.Line([plot.x, y, plot.x + plot.w, y], { stroke: GRID, strokeWidth: 1 }), text(label(v), plot.x - pad * 0.6, y, { originX: 'right', fontSize: fs * 0.8, fill: '#8a8290' })); }
   }
   const slot = (horizontal ? plot.h : plot.w) / rows.length;
   if (c.kind === 'line') {
     const pts = rows.map(([, v], i) => ({ x: plot.x + slot * (i + 0.5), y: plot.y + plot.h - plot.h * v / max }));
-    out.push(new fabric.Polyline(pts, { fill: '', stroke: rows[0][2], strokeWidth: Math.max(2, fs / 5), strokeLineJoin: 'round', strokeLineCap: 'round', kbName: 'Line' }));
+    out.push(new kbe.Polyline(pts, { fill: '', stroke: rows[0][2], strokeWidth: Math.max(2, fs / 5), strokeLineJoin: 'round', strokeLineCap: 'round', kbName: 'Line' }));
     pts.forEach((p, i) => {
-      out.push(new fabric.Circle({ left: p.x, top: p.y, radius: Math.max(3, fs / 4), originX: 'center', originY: 'center', fill: '#ffffff', stroke: rows[0][2], strokeWidth: Math.max(2, fs / 6) }));
+      out.push(new kbe.Circle({ left: p.x, top: p.y, radius: Math.max(3, fs / 4), originX: 'center', originY: 'center', fill: '#ffffff', stroke: rows[0][2], strokeWidth: Math.max(2, fs / 6) }));
       if (c.values) out.push(text(label(rows[i][1]), p.x, p.y - fs * 0.9, { fontSize: fs * 0.8 }));
     });
   }
   rows.forEach(([name, v, colour], i) => {
     if (horizontal) {
       const y = plot.y + slot * i, len = plot.w * v / max, thick = slot * 0.62;
-      if (len > 0) out.push(new fabric.Rect({ left: plot.x, top: y + (slot - thick) / 2, width: len, height: thick, rx: Math.min(6, thick / 4), ry: Math.min(6, thick / 4), fill: colour, strokeWidth: 0, kbName: name || 'Bar' }));
+      if (len > 0) out.push(new kbe.Rect({ left: plot.x, top: y + (slot - thick) / 2, width: len, height: thick, rx: Math.min(6, thick / 4), ry: Math.min(6, thick / 4), fill: colour, strokeWidth: 0, kbName: name || 'Bar' }));
       out.push(text(short(name, 24), plot.x - pad * 0.6, y + slot / 2, { originX: 'right', fontSize: fs * 0.85 }));
       if (c.values) out.push(text(label(v), plot.x + len + pad * 0.5, y + slot / 2, { originX: 'left', fontSize: fs * 0.85, fontWeight: 'bold' }));
     } else {
       const x = plot.x + slot * i;
       if (c.kind === 'column') {
         const tall = plot.h * v / max, thick = slot * 0.62;
-        if (tall > 0) out.push(new fabric.Rect({ left: x + (slot - thick) / 2, top: plot.y + plot.h - tall, width: thick, height: tall, rx: Math.min(6, thick / 4), ry: Math.min(6, thick / 4), fill: colour, strokeWidth: 0, kbName: name || 'Column' }));
+        if (tall > 0) out.push(new kbe.Rect({ left: x + (slot - thick) / 2, top: plot.y + plot.h - tall, width: thick, height: tall, rx: Math.min(6, thick / 4), ry: Math.min(6, thick / 4), fill: colour, strokeWidth: 0, kbName: name || 'Column' }));
         if (c.values) out.push(text(label(v), x + slot / 2, plot.y + plot.h - tall - fs * 0.7, { fontSize: fs * 0.85, fontWeight: 'bold' }));
       }
       out.push(text(short(name, Math.max(3, Math.floor(slot / (fs * 0.55)))), x + slot / 2, plot.y + plot.h + fs * 0.9, { fontSize: fs * 0.85 }));
     }
   });
-  out.push(horizontal ? new fabric.Line([plot.x, plot.y, plot.x, plot.y + plot.h], { stroke: '#b8b0bd', strokeWidth: 1.5 }) : new fabric.Line([plot.x, plot.y + plot.h, plot.x + plot.w, plot.y + plot.h], { stroke: '#b8b0bd', strokeWidth: 1.5 }));
+  out.push(horizontal ? new kbe.Line([plot.x, plot.y, plot.x, plot.y + plot.h], { stroke: '#b8b0bd', strokeWidth: 1.5 }) : new kbe.Line([plot.x, plot.y + plot.h, plot.x + plot.w, plot.y + plot.h], { stroke: '#b8b0bd', strokeWidth: 1.5 }));
   return out;
 }
 function makeChart(spec) {
-  const c = cleanChart(spec), g = new fabric.Group(chartParts(c), { kbName: (CHART_KINDS.find(([k]) => k === c.kind)[1]) + ' chart', subTargetCheck: false });
+  const c = cleanChart(spec), g = new kbe.Group(chartParts(c), { kbName: (CHART_KINDS.find(([k]) => k === c.kind)[1]) + ' chart', subTargetCheck: false });
   g.kbChart = c;
   return g;
 }

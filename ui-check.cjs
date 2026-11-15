@@ -1119,7 +1119,7 @@ const test = `<script>
       const qrObject = board.getActiveObject(), modules = qrObject.getObjects();
       step(modules[0].width === 29 && modules[0].fill === '#ffffff' && modules[1].type === 'path' && modules[1].width === 21 && modules[1].left - modules[0].left === 4, 'known QR has 21 modules and a four-module white quiet zone');
       const savedPath = JSON.stringify(modules[1].path), title = design.title;
-      step(qrcode.stringToBytes('Café 📚').join() === [...new TextEncoder().encode('Café 📚')].join(), 'QR text uses UTF-8 bytes');
+      step(makeQr('Café 📚').count === 21 && makeQr('é'.repeat(7)).count === 21 && makeQr('é'.repeat(8)).count === 25, 'QR text uses UTF-8 bytes (7 accented letters fit version 1, 8 need version 2)');
       let badQr = 0;
       for (const text of ['', ' ', 'x'.repeat(1001)]) { try { addQr(text); } catch { badQr++; } }
       step(badQr === 3, 'QR rejects empty or overlong input');
@@ -1183,14 +1183,14 @@ const test = `<script>
       }
       // Allow small rasterizer/antialiasing differences; geometry above is checked independently.
       step(before.width === after.width && before.height === after.height && difference / before.data.length < 1 && changed / before.data.length < 0.005, 'Fabric 6 rendered pixels stay within rasterizer tolerance');
-      step(blob().format === 1 && new fabric.Rect().originX === 'left' && new fabric.Rect().originY === 'top', 'New objects keep left/top origins and designs keep format 1');
+      step(blob().format === 1 && new kbe.Rect().originX === 'left' && new kbe.Rect().originY === 'top', 'New objects keep left/top origins and designs keep format 1');
     }
 
     {
       await newDesign();
       const source = document.createElement('canvas'); source.width = 160; source.height = 120;
       const ctx = source.getContext('2d'); ctx.fillStyle = '#ff0000'; ctx.fillRect(0, 0, 80, 120); ctx.fillStyle = '#0000ff'; ctx.fillRect(80, 0, 80, 120);
-      const image = await fabric.FabricImage.fromURL(source.toDataURL()); image.set({ left: 120, top: 100, scaleX: 2, scaleY: 2 }); place(image);
+      const image = await kbe.FabricImage.fromURL(source.toDataURL()); image.set({ left: 120, top: 100, scaleX: 2, scaleY: 2 }); place(image);
       const original = JSON.stringify(image.toObject(KEEP)), initialHistory = here;
       zoomBoard(2); panBy(-70, -90);
       const view = JSON.stringify(board.viewportTransform);
@@ -1266,7 +1266,7 @@ const test = `<script>
 
     { // B1: editing, using the real Fabric canvas and save format.
     await settle(newDesign(), 'B1 blank design');
-    const boxes = [0, 1, 2].map(i => new fabric.Rect({ left: 40 + i * 150, top: 60 + i * 40, width: 60 + i * 10, height: 50, strokeWidth: 0, fill: '#ffd966' }));
+    const boxes = [0, 1, 2].map(i => new kbe.Rect({ left: 40 + i * 150, top: 60 + i * 40, width: 60 + i * 10, height: 50, strokeWidth: 0, fill: '#ffd966' }));
     board.add(...boxes); selectObjects(boxes); commitDesign();
     const positions = () => boxes.map(o => o.getCoords().map(p => [p.x, p.y]));
     const beforeGroup = JSON.stringify(positions());
@@ -1314,10 +1314,10 @@ const test = `<script>
     for (const destination of ['new', 'open', 'home']) {
       await settle(newDesign(), 'pending paste source');
       const sourceTitle = design.title, original = addShape('rect'); copySelected(true);
-      const fromObject = fabric.Rect.fromObject;
+      const fromObject = kbe.Rect.fromObject;
       let releaseDecode;
       const decodeGate = new Promise(r => releaseDecode = r);
-      fabric.Rect.fromObject = async (...args) => { await decodeGate; return fromObject.call(fabric.Rect, ...args); };
+      kbe.Rect.fromObject = async (...args) => { await decodeGate; return fromObject.call(kbe.Rect, ...args); };
       try {
         const pasting = pasteSelected();
         const leaving = destination === 'new' ? newDesign() : destination === 'open' ? openDesign(pasteDestination) : $('#create-home').onclick();
@@ -1331,7 +1331,7 @@ const test = `<script>
         step(stored.length === 1 && stored[0].left === original.left + 24, destination + ' saves the pending cut/paste to its source design');
         step(!$('#create').inert && !$('#home').inert && (destination === 'home' ? mode === 'home' : design.title !== sourceTitle), 'transition finishes and unfreezes');
         if (destination === 'new') step(board.getObjects().length === 0, 'pending paste never lands in the new design');
-      } finally { releaseDecode(); fabric.Rect.fromObject = fromObject; }
+      } finally { releaseDecode(); kbe.Rect.fromObject = fromObject; }
     }
     await settle(newDesign(), 'pending image batch source');
     const batchTitle = design.title, bitmap = window.createImageBitmap;
@@ -1412,11 +1412,11 @@ const test = `<script>
     step(board.getObjects().every((o, i) => o === [stack[0], stack[1], stack[3], stack[2]][i]), 'selected block moves backward with its order intact');
     await settle(newDesign(), 'shapes and draw design');
     for (const kind of ['triangle', 'star', 'rounded', 'bubble']) $('#add-' + kind).click();
-    showDrawer('draw'); step(board.isDrawingMode && board.freeDrawingBrush instanceof fabric.PencilBrush && $('#draw-tools').children.length === 5 && $('#draw-swatches').children.length === 10, 'Draw enables Fabric PencilBrush, with five pens and ten colours');
+    showDrawer('draw'); step(board.isDrawingMode && board.freeDrawingBrush instanceof kbe.PencilBrush && $('#draw-tools').children.length === 5 && $('#draw-swatches').children.length === 10, 'Draw enables Fabric PencilBrush, with five pens and ten colours');
     const stroke = (x0, y0, x1, y1) => { const brush = board.freeDrawingBrush;
-      brush.onMouseDown(new fabric.Point(x0, y0), { e: new MouseEvent('mousedown', { button: 0 }) });
-      brush.onMouseMove(new fabric.Point((x0 + x1) / 2, (y0 + y1) / 2 + 5), { e: new MouseEvent('mousemove', { buttons: 1 }) });
-      brush.onMouseMove(new fabric.Point(x1, y1), { e: new MouseEvent('mousemove', { buttons: 1 }) });
+      brush.onMouseDown(new kbe.Point(x0, y0), { e: new MouseEvent('mousedown', { button: 0 }) });
+      brush.onMouseMove(new kbe.Point((x0 + x1) / 2, (y0 + y1) / 2 + 5), { e: new MouseEvent('mousemove', { buttons: 1 }) });
+      brush.onMouseMove(new kbe.Point(x1, y1), { e: new MouseEvent('mousemove', { buttons: 1 }) });
       brush.onMouseUp({ e: new MouseEvent('mouseup', { button: 0 }) }); return board.getObjects().at(-1); };
     stroke(40, 40, 100, 80);
     step(board.getObjects().length === 5 && board.getObjects().at(-1).kbName === 'Drawing', 'new shapes and free drawing create saved objects');
@@ -1432,13 +1432,13 @@ const test = `<script>
     step(!board.isDrawingMode && board.skipTargetFind && /Undo brings it back/.test($('#draw-hint').textContent) && $('#draw-pen-options').hidden && !$('#draw-eraser-options').hidden && drawing.rub === 'part', 'the Eraser stops drawing and takes the mouse, rubbing out part of a line to start with');
     // 0.43: rubbing out the middle of a line leaves its two ends, each where it was, looking the same.
     const rubbed = stroke(200, 420, 400, 420), rubCount = board.getObjects().length, rubAt = board.getObjects().indexOf(rubbed), rubHere = here;
-    drawing.down = true; eraseAt(new fabric.Point(300, 424)); drawToolsUp();
+    drawing.down = true; eraseAt(new kbe.Point(300, 424)); drawToolsUp();
     const ends = board.getObjects().slice(rubAt, rubAt + 2), endBox = ends.map(o => o.getBoundingRect());
     step(!board.getObjects().includes(rubbed) && board.getObjects().length === rubCount + 1 && ends.every(o => o.type === 'path' && o.kbName === rubbed.kbName && o.opacity === rubbed.opacity && o.stroke === rubbed.stroke && o.strokeWidth === rubbed.strokeWidth) && here === rubHere + 1, () => 'the line is cut in two, keeping its look, as one Undo step: ' + board.getObjects().map(o => o.type + ':' + o.kbName + ':' + o.opacity));
     step(Math.abs(endBox[0].left - (rubbed.getBoundingRect().left)) < 2 && endBox[0].left + endBox[0].width < 290 && endBox[1].left > 310 && Math.abs(endBox[1].left + endBox[1].width - (rubbed.getBoundingRect().left + rubbed.getBoundingRect().width)) < 2, () => 'the ends stay put and the middle is gone: ' + JSON.stringify(endBox));
     ends.forEach(o => board.remove(o)); commitDesign();
     const turned = stroke(200, 520, 400, 520); turned.set({ angle: 30, scaleX: 1.5, scaleY: 1.5 }); turned.setCoords();
-    const tipsOf = o => { const m = o.calcTransformMatrix(), p = o.path, a = new fabric.Point(p[0][1], p[0][2]).subtract(o.pathOffset), b = new fabric.Point(p.at(-1).at(-2), p.at(-1).at(-1)).subtract(o.pathOffset); return [fabric.util.transformPoint(a, m), fabric.util.transformPoint(b, m)]; };
+    const tipsOf = o => { const m = o.calcTransformMatrix(), p = o.path, a = new kbe.Point(p[0][1], p[0][2]).subtract(o.pathOffset), b = new kbe.Point(p.at(-1).at(-2), p.at(-1).at(-1)).subtract(o.pathOffset); return [kbe.util.transformPoint(a, m), kbe.util.transformPoint(b, m)]; };
     const [tipA, tipB] = tipsOf(turned), mid = tipA.lerp(tipB, 0.5), turnedAt = board.getObjects().indexOf(turned);
     drawing.down = true; eraseAt(mid); drawToolsUp();
     const [halfA, halfB] = board.getObjects().slice(turnedAt, turnedAt + 2);
@@ -1447,13 +1447,13 @@ const test = `<script>
     $('#draw-rub [data-rub=whole]').click();
     step(drawing.rub === 'whole' && /whole line/.test($('#draw-hint').textContent) && $('#draw-rub [data-rub=whole]').classList.contains('on'), 'Whole lines can be chosen instead');
     const count = board.getObjects().length, history0 = here;
-    drawing.down = true; eraseAt(new fabric.Point(300, 200)); drawToolsUp();
+    drawing.down = true; eraseAt(new kbe.Point(300, 200)); drawToolsUp();
     step(board.getObjects().length === count - 1 && !board.getObjects().includes(lit) && board.getObjects().includes(glow) && here === history0 + 1, 'the Eraser takes away the line it touches, and only that line, as one Undo step');
-    drawing.down = true; eraseAt(new fabric.Point(300, 600)); drawToolsUp();
+    drawing.down = true; eraseAt(new kbe.Point(300, 600)); drawToolsUp();
     step(board.getObjects().length === count - 1 && here === history0 + 1, 'erasing empty page changes nothing');
     // A thin pen line, zoomed out, is about a pixel wide on screen: the eraser still catches it a few pixels away.
     const zoom0 = board.getZoom(); zoomBoard(0.32); $('#draw-tools [data-draw=pen]').click(); const thin = stroke(100, 700, 400, 700); $('#draw-tools [data-draw=eraser]').click();
-    drawing.down = true; eraseAt(new fabric.Point(250, 708)); drawToolsUp();
+    drawing.down = true; eraseAt(new kbe.Point(250, 708)); drawToolsUp();
     step(!board.getObjects().includes(thin), 'the eraser catches a thin line when zoomed out');
     zoomBoard(zoom0);
     $('#draw-rub [data-rub=part]').click();
@@ -1819,7 +1819,7 @@ const test = `<script>
     await until(() => $('#shoot-list').children.length === photos.filter(p => rating(p).flag !== 'reject').length && $('#shoot-list').children.length > 0 && $('#shoot-empty').hidden, () => 'This shoot lists the open shoot without rejects: ' + $('#shoot-list').children.length);
     step(photos.some(p => rating(p).flag === 'pick') ? $('#shoot-list').firstElementChild.classList.contains('pick') : true, 'picks come first');
     step($('#add-frame-circle') && $('#add-frame-portrait').draggable, 'Elements offers photo frames that can be dragged');
-    const frameAt = new fabric.Point(250, 300);
+    const frameAt = new kbe.Point(250, 300);
     dropItem(['frame', 'circle'], frameAt);
     const frame = board.getActiveObject(), frameIndex = board.getObjects().indexOf(frame);
     step(emptyFrame(frame) && frame.kbFrame === 'circle' && Math.abs(frame.getCenterPoint().x - 250) < 1 && blob().canvas.objects.at(-1).kbFrame === 'circle', 'a frame lands where it is dropped and is saved as a frame');
@@ -2052,7 +2052,7 @@ const test = `<script>
       put($('#create-page'), 'label-5395', 'change');
       await until(() => design.page === 'label-5395', 'name badge size');
       step(design.tile === 'sheet' && !$('#create-tile').disabled && [...$('#create-page').options].some(o => o.value === 'label-5160' && o.textContent.includes('Avery 5160')), 'a label size prints a sheet full, and the sizes are listed');
-      board.add(new fabric.Textbox('Student Name', { left: 16, top: 30, width: 290, fontSize: 30, fontFamily: 'Lexend' }), new fabric.Textbox('Room {room}', { left: 16, top: 120, width: 290, fontSize: 16, fontFamily: 'Lexend' }));
+      board.add(new kbe.Textbox('Student Name', { left: 16, top: 30, width: 290, fontSize: 30, fontFamily: 'Lexend' }), new kbe.Textbox('Room {room}', { left: 16, top: 120, width: 290, fontSize: 16, fontFamily: 'Lexend' }));
       commitDesign();
       $('#file-bulk').click();
       step(!$('#bulk').hidden && $('#bulk-make').disabled, 'Bulk create opens, waiting for a list');
@@ -2102,8 +2102,8 @@ const test = `<script>
       $('#bulk-cancel').click(); $('#bulk-list').value = '';
       // 0.36: a sheet with the same box several times (four name tags) gets a different name in each, in reading order.
       await settle(newDesign(), 'a sheet of name tags');
-      const tag = (left, top) => new fabric.Textbox('Student Name', { left, top, width: 200, fontSize: 24, fontFamily: 'Lexend' });
-      board.add(tag(300, 200), tag(16, 200), tag(300, 30), tag(16, 30), new fabric.Textbox('Our class', { left: 16, top: 400, width: 200, fontSize: 24 }));
+      const tag = (left, top) => new kbe.Textbox('Student Name', { left, top, width: 200, fontSize: 24, fontFamily: 'Lexend' });
+      board.add(tag(300, 200), tag(16, 200), tag(300, 30), tag(16, 30), new kbe.Textbox('Our class', { left: 16, top: 400, width: 200, fontSize: 24 }));
       commitDesign();
       $('#file-bulk').click();
       $('#bulk-list').value = 'Ava\\nBen\\nCy\\nDee\\nEd'; $('#bulk-list').dispatchEvent(new Event('input'));
@@ -2158,7 +2158,7 @@ const test = `<script>
     step(imported.map(o => o.type).join() === 'image,image,image,textbox,rect,rect,textbox,rect,textbox,rect,textbox,rect', () => 'pictures, text, shapes and table cells in order, the unknown shape left out: ' + imported.map(o => o.type));
     const [turned, overflowing, round, title, badge, nameCell, nameText, scoreCell, , totalCell, totalText, grouped] = imported;
     step(nameCell.kbName === 'Table cell' && nameCell.left === 48 && nameCell.top === 480 && nameCell.width === 96 && nameCell.height === 48 && nameCell.fill === '#ffeeaa' && nameCell.stroke === '#333333', () => 'a table cell keeps its place, size, fill and border: ' + JSON.stringify([nameCell.left, nameCell.top, nameCell.width, nameCell.height, nameCell.fill, nameCell.stroke]));
-    step(nameText.text === 'Name' && nameText.kbName === 'Cell text' && Math.abs(nameText.left - 48) < 1 && scoreCell.left === 144 && !scoreCell.fill, 'cell text sits in its cell, with the cell margins');
+    step(nameText.text === 'Name' && nameText.kbName === 'Cell text' && Math.abs(nameText.left - 48) < 1 && scoreCell.left === 144 && !scoreCell.fill, () => 'cell text sits in its cell, with the cell margins: ' + JSON.stringify([nameText.text, nameText.kbName, nameText.left, scoreCell.left, scoreCell.fill]));
     const importedTable = nameCell.kbTable && readTable(nameCell.kbTable), totalK = importedTable?.cells.find(k => k.rect === totalCell);
     step(importedTable?.cells.length === 3 && totalK?.cs === 2 && totalK.text === totalText && nameText.kbTable === nameCell.kbTable, 'a Canva table becomes a table that can be changed, merged cell and all');
     step(totalCell.width === 192 && totalText.text === 'Total' && totalText.top > totalCell.top + 8, () => 'a merged cell spans both columns and centres its text: ' + totalCell.width + ' ' + totalText.top);
@@ -2291,7 +2291,7 @@ const test = `<script>
     step(comboBottom.top > comboTop.top + comboTop.height && Math.abs(comboTop.getCenterPoint().x - 408) < 1, 'its lines are stacked and centred on the page');
     $('#create-undo').click();
     await until(() => board.getObjects().length === beforeCombo && !restoring, 'one undo takes the whole combination off');
-    dropItem(['combo', 5], new fabric.Point(300, 700));
+    dropItem(['combo', 5], new kbe.Point(300, 700));
     const tripLines = board.getObjects().slice(-3);
     step(tripLines.length === 3 && tripLines[0].text === 'Field Trip' && Math.abs(tripLines[1].getCenterPoint().x - 300) < 1, 'dropping a combination places it where it lands');
     // More elements: shapes, lines, frame outlines and photo grids.
@@ -2324,7 +2324,7 @@ const test = `<script>
     const reopenedHeart = board.getObjects().find(o => o.type === 'image');
     step(reopenedHeart.clipPath?.kbFrame === 'heart' && board.getObjects().filter(o => o.kbFrame === 'rect' && o.kbName === 'Grid frame').length === 3, 'frame shapes and grids survive save and reopen');
     const oldSaved = reopenedHeart.toObject(KEEP); oldSaved.clipPath.left = oldSaved.width / 2; oldSaved.clipPath.top = oldSaved.height / 2;
-    const [repaired] = await fabric.util.enlivenObjects([oldSaved]);
+    const [repaired] = await kbe.util.enlivenObjects([oldSaved]);
     step(repaired.clipPath.left === 0 && repaired.clipPath.top === 0, 'a frame clip saved off-centre by older versions is recentred on load');
 
     // 0.21: strikethrough, capitals, lists, curved text, Copy style, and exact size and rotation.
@@ -2399,7 +2399,7 @@ const test = `<script>
     const leafSwatch = swatches.find(i => i.value === '#c8552b');
     leafSwatch.value = '#8e6cc4'; leafSwatch.dispatchEvent(new Event('input')); leafSwatch.dispatchEvent(new Event('change'));
     step(maple.getObjects().some(p => p.fill === '#8e6cc4') && !maple.getObjects().some(p => p.fill === '#c8552b'), 'changing a swatch recolours that colour everywhere in it');
-    dropItem(['decor', 'daisy'], new fabric.Point(300, 300));
+    dropItem(['decor', 'daisy'], new kbe.Point(300, 300));
     await until(() => board.getObjects().some(o => o.kbName === 'Daisy'), 'a decoration can be dropped onto the page');
     // Charts: one tile per kind, edited from the toolbar.
     step(CHART_KINDS.every(([kind]) => $('#add-chart-' + kind)), 'Elements lists the charts');
@@ -2425,7 +2425,7 @@ const test = `<script>
     put($('#chart-title'), 'Reading minutes', 'change');
     step(board.getActiveObject().getObjects().some(o => o.text === 'Reading minutes'), 'a title can be added');
     closeMenus();
-    dropItem(['chart', 'line'], new fabric.Point(400, 300));
+    dropItem(['chart', 'line'], new kbe.Point(400, 300));
     await until(() => board.getObjects().some(o => o.kbChart?.kind === 'line'), 'a chart can be dropped onto the page');
     // Gradients, a photo as the background, and see-through PNGs.
     selectObjects([square]); paintPanel(); $('#colours-open').click();
@@ -2440,7 +2440,7 @@ const test = `<script>
     step(board.backgroundColor?.colorStops && board.backgroundColor.gradientUnits === 'pixels' && documentColours().includes(GRADIENTS[2][0]), 'with nothing selected a gradient fills the page, and its colours join the design colours');
     closeMenus();
     const bgCanvas = Object.assign(document.createElement('canvas'), { width: 300, height: 200 }); bgCanvas.getContext('2d').fillRect(0, 0, 300, 200);
-    const photo = new fabric.FabricImage(bgCanvas, { left: 30, top: 30, scaleX: 0.3, scaleY: 0.3, angle: 10 }); board.add(photo); selectObjects([photo]); paintPanel();
+    const photo = new kbe.FabricImage(bgCanvas, { left: 30, top: 30, scaleX: 0.3, scaleY: 0.3, angle: 10 }); board.add(photo); selectObjects([photo]); paintPanel();
     step(seen('#prop-set-bg'), 'a photo shows Set as background');
     openMenu(100, 100);
     step([...$('#create-menu').children].some(b => b.textContent === 'Set as background'), 'and so does its ⋯ menu'); closeMenus();
@@ -2448,7 +2448,7 @@ const test = `<script>
     const [pageW, pageH] = pagePx();
     step(board.getObjects()[0] === photo && photo.kbLocked && photo.angle === 0 && photo.getScaledWidth() >= pageW - 0.5 && photo.getScaledHeight() >= pageH - 0.5 && Math.abs(photo.getCenterPoint().x - pageW / 2) < 0.5, () => 'the photo fills the page, at the back, locked: ' + [photo.getScaledWidth(), photo.getScaledHeight(), pageW, pageH]);
     $('#create-transparent').checked = true;
-    const clear = await render(0.05, 'png', 0.92, seeThrough({ version: fabric.version, objects: [], background: '#ff0000' }));
+    const clear = await render(0.05, 'png', 0.92, seeThrough({ version: kbe.version, objects: [], background: '#ff0000' }));
     const clearImg = await new Promise(done => { const i = new Image(); i.onload = () => done(i); i.src = clear; });
     const clearCtx = Object.assign(document.createElement('canvas'), { width: clearImg.width, height: clearImg.height }).getContext('2d'); clearCtx.drawImage(clearImg, 0, 0);
     step(clearCtx.getImageData(1, 1, 1, 1).data[3] === 0, 'a see-through PNG leaves out the page colour');
@@ -2521,7 +2521,7 @@ const test = `<script>
     await settle(addMine(tableName), 'add a saved table');
     const copyId = board.getActiveObjects()[0].kbTable;
     step(copyId && copyId !== keptTable && readTable(copyId).cells.length === 4 && readTable(keptTable).cells.length === 4, 'a saved table comes back as its own table');
-    dropItem(['mine', 'Maple leaf'], new fabric.Point(500, 500));
+    dropItem(['mine', 'Maple leaf'], new kbe.Point(500, 500));
     await until(() => board.getObjects().filter(o => o.kbName === 'Maple leaf').length === 2, 'a saved element can be dropped onto the page');
     const mapleTile = [...$('#create-mine').children].find(t => t.textContent.includes('Maple leaf'));
     mapleTile.querySelector('button[title=Rename]').click();
@@ -2563,7 +2563,7 @@ const test = `<script>
       $('#prop-retouch').click();
       step(drawer === 'retouch' && touch.tool === 'remove' && touchMode && board.skipTargetFind && !board.selection, 'Retouch opens its drawer with Remove picked, and the page paints instead of selecting');
       step($('#touch-tools').children.length === 9 && $('#touch-strength-row').hidden && $('#touch-hint').textContent.includes('disappear'), 'nine brushes; Remove has no strength');
-      const uvAt = toPicture(pic, new fabric.Point(160, 150)), back = fromPicture(pic, uvAt);
+      const uvAt = toPicture(pic, new kbe.Point(160, 150)), back = fromPicture(pic, uvAt);
       step(Math.abs(uvAt[0] - 0.2) < 1e-6 && Math.abs(uvAt[1] - 0.25) < 1e-6 && Math.abs(back.x - 160) < 1e-6 && Math.abs(back.y - 150) < 1e-6, () => 'page points map to the picture and back: ' + uvAt);
       pic.set({ angle: 90, flipX: true }); pic.setCoords();
       const turned = fromPicture(pic, [0.2, 0.25]), again = toPicture(pic, turned);
@@ -2572,12 +2572,12 @@ const test = `<script>
       const veil = document.createElement('canvas'); veil.width = 300; veil.height = 200; veil.getContext('2d').fillRect(250, 0, 50, 50);
       const over = await settle(addImageBlob(await new Promise(r => veil.toBlob(r, 'image/png')), 'veil'), 'a see-through picture on top');
       over.set({ left: 100, top: 100, scaleX: 1, scaleY: 1, angle: 0 }); over.setCoords();
-      step(pictureAt(new fabric.Point(160, 150), 0) === pic && pictureAt(new fabric.Point(380, 110), 0) === over, 'the brush reaches through the see-through part of a picture on top');
-      step(pictureAt(new fabric.Point(342, 160), 20) === over && pictureAt(new fabric.Point(342, 160), 0) === pic, 'and catches a picture whose visible part is inside the brush, not just under its middle');
+      step(pictureAt(new kbe.Point(160, 150), 0) === pic && pictureAt(new kbe.Point(380, 110), 0) === over, 'the brush reaches through the see-through part of a picture on top');
+      step(pictureAt(new kbe.Point(342, 160), 20) === over && pictureAt(new kbe.Point(342, 160), 0) === pic, 'and catches a picture whose visible part is inside the brush, not just under its middle');
       board.remove(over); board.discardActiveObject();
       commitDesign(); // where it is now is what Undo returns to
       const srcBefore = pic.getSrc(), canvasRect = board.upperCanvasEl.getBoundingClientRect();
-      const screenAt = (x, y) => { const p = new fabric.Point(x, y).transform(board.viewportTransform); return { clientX: canvasRect.left + p.x, clientY: canvasRect.top + p.y }; };
+      const screenAt = (x, y) => { const p = new kbe.Point(x, y).transform(board.viewportTransform); return { clientX: canvasRect.left + p.x, clientY: canvasRect.top + p.y }; };
       const paint = points => {
         board.upperCanvasEl.dispatchEvent(new MouseEvent('mousedown', { ...screenAt(...points[0]), bubbles: true, button: 0, buttons: 1 }));
         for (const p of points.slice(1)) document.dispatchEvent(new MouseEvent('mousemove', { ...screenAt(...p), bubbles: true, buttons: 1 }));
@@ -2635,7 +2635,7 @@ const test = `<script>
       step(drawer === 'retouch' && photoTab === 'cutout' && touchMode && seen('#photo-cutout') && !seen('#photo-retouch') && $('#cut-tools').children.length === 5, 'it opens the Edit photo drawer on Cut out, with five ways to choose, and the page paints');
       step(!seen('#cut-actions') && seen('#cut-size-row') && !seen('#cut-tolerance-row'), 'nothing to do until something is chosen; the Smart brush shows its size');
       const canvasRect = board.upperCanvasEl.getBoundingClientRect();
-      const screenAt = (x, y) => { const p = new fabric.Point(x, y).transform(board.viewportTransform); return { clientX: canvasRect.left + p.x, clientY: canvasRect.top + p.y }; };
+      const screenAt = (x, y) => { const p = new kbe.Point(x, y).transform(board.viewportTransform); return { clientX: canvasRect.left + p.x, clientY: canvasRect.top + p.y }; };
       const paint = points => {
         board.upperCanvasEl.dispatchEvent(new MouseEvent('mousedown', { ...screenAt(...points[0]), bubbles: true, button: 0, buttons: 1 }));
         for (const p of points.slice(1)) document.dispatchEvent(new MouseEvent('mousemove', { ...screenAt(...p), bubbles: true, buttons: 1 }));
@@ -2805,7 +2805,7 @@ const test = `<script>
       $('#prop-retouch').click(); $('#photo-tabs [data-photo-tab=straighten]').click();
       step(photoTab === 'straighten' && seen('#photo-straighten') && !seen('#photo-cutout') && touchMode && straightTool.image === pic && seen('#straight-actions'), () => 'the Straighten tab takes the selected picture and shows its corners: ' + [photoTab, seen('#photo-straighten'), seen('#photo-cutout'), touchMode, straightTool.image === pic, !!straightTool.image, seen('#straight-actions'), drawer]);
       const canvasRect = board.upperCanvasEl.getBoundingClientRect();
-      const screenAt = (x, y) => { const p = new fabric.Point(x, y).transform(board.viewportTransform); return { clientX: canvasRect.left + p.x, clientY: canvasRect.top + p.y }; };
+      const screenAt = (x, y) => { const p = new kbe.Point(x, y).transform(board.viewportTransform); return { clientX: canvasRect.left + p.x, clientY: canvasRect.top + p.y }; };
       const drag = (from, to) => {
         board.upperCanvasEl.dispatchEvent(new MouseEvent('mousedown', { ...screenAt(...from), bubbles: true, button: 0, buttons: 1 }));
         document.dispatchEvent(new MouseEvent('mousemove', { ...screenAt((from[0] + to[0]) / 2, (from[1] + to[1]) / 2), bubbles: true, buttons: 1 }));
@@ -2862,7 +2862,7 @@ const test = `<script>
       $('#prop-retouch').click(); $('#photo-tabs [data-photo-tab=reshape]').click();
       step(photoTab === 'reshape' && seen('#photo-reshape') && !seen('#photo-straighten') && touchMode && shape.image === pic && $('#shape-tools').children.length === 3, 'the Reshape tab takes the selected picture, with Push, Grow and Shrink');
       const canvasRect = board.upperCanvasEl.getBoundingClientRect();
-      const screenAt = (x, y) => { const p = new fabric.Point(x, y).transform(board.viewportTransform); return { clientX: canvasRect.left + p.x, clientY: canvasRect.top + p.y }; };
+      const screenAt = (x, y) => { const p = new kbe.Point(x, y).transform(board.viewportTransform); return { clientX: canvasRect.left + p.x, clientY: canvasRect.top + p.y }; };
       const down = (x, y) => board.upperCanvasEl.dispatchEvent(new MouseEvent('mousedown', { ...screenAt(x, y), bubbles: true, button: 0, buttons: 1 }));
       const move = (x, y) => document.dispatchEvent(new MouseEvent('mousemove', { ...screenAt(x, y), bubbles: true, buttons: 1 }));
       const up = (x, y) => document.dispatchEvent(new MouseEvent('mouseup', { ...screenAt(x, y), bubbles: true, button: 0 }));
@@ -2998,7 +2998,7 @@ const test = `<script>
       step(x.placed.length >= 5 && agree && letters.size === x.cells.size && x.placed.every(p => p.n >= 1) && Math.min(...x.placed.map(p => p.n)) === 1, () => 'the crossword words cross on shared letters and are numbered: ' + x.placed.map(p => p.n + ':' + p.word));
       const ten = mathProblems('add', 10, 20, 7), page = mathPage('M', ten, false).objects.filter(o => /^Problem /.test(o.kbName));
       step(new Set(ten.map(p => p.text)).size === 20 && ten.filter(p => / 0\b|^0 /.test(p.text)).length <= 2, () => 'twenty different problems, hardly any with a 0: ' + ten.map(p => p.text));
-      const lines = await Promise.all(page.map(async o => (await fabric.util.enlivenObjects([o]))[0].textLines.length));
+      const lines = await Promise.all(page.map(async o => (await kbe.util.enlivenObjects([o]))[0].textLines.length));
       step(lines.every(l => l === 1), () => 'every problem and its blank fit on one line: ' + lines);
       const check = (op, upTo) => mathProblems(op, upTo, 30, 5).every(p => { const [a, sign, b] = p.text.split(' '); const A = +a, B = +b; const v = sign === '+' ? A + B : sign === '−' ? A - B : sign === '×' ? A * B : A / B; return v === p.answer && Number.isInteger(v) && v >= 0 && (sign !== '+' || v <= upTo); });
       step(['add', 'sub', 'mixed', 'mul', 'div'].every(op => check(op, 10) && check(op, 100)), 'math problems have whole answers, never below zero, and sums stay within the limit');
@@ -3017,7 +3017,7 @@ const test = `<script>
       await until(() => design.title.startsWith('Math practice') && !$('#sheet-dialog').open, 'Make the math page');
       step(designPages.length === 1 && board.getObjects().filter(o => /^Problem /.test(o.kbName)).length === 20 && board.getObjects().every(o => !/answer key/.test(o.text || '')), 'twenty problems and no answer key when it is unticked');
       // 0.44: preschool pages.
-      { const box = Object.entries(GLYPHS).map(([c, [w, d]]) => { const p = new fabric.Path(d), r = { x0: p.left, y0: p.top, x1: p.left + p.width, y1: p.top + p.height }; return [c, r, r.x0 >= -1 && r.x1 <= w + 1 && r.y0 >= -6 && r.y1 <= 141]; });
+      { const box = Object.entries(GLYPHS).map(([c, [w, d]]) => { const p = new kbe.Path(d), r = { x0: p.left, y0: p.top, x1: p.left + p.width, y1: p.top + p.height }; return [c, r, r.x0 >= -1 && r.x1 <= w + 1 && r.y0 >= -6 && r.y1 <= 141]; });
         step(box.length >= 64 && box.every(b => b[2]), () => 'every ball-and-stick letter stays inside its box: ' + JSON.stringify(box.filter(b => !b[2])));
         step(shiftPath('M0 0 L10 20 A5 5 0 1 0 30 40 Q1 2 3 4', 100, 50, 2) === 'M100 50 L120 90 A10 10 0 1 0 160 130 Q102 54 106 58', () => 'paths move and scale: ' + shiftPath('M0 0 L10 20 A5 5 0 1 0 30 40 Q1 2 3 4', 100, 50, 2));
         const ava = traceText('Ava', 68, 200, 0.8, true), at = ava.getBoundingRect();
@@ -3152,7 +3152,7 @@ const test = `<script>
       step(JSON.parse(disk.createSettings).classroom.teacher === 'Mrs. "B"' && !$('#class-details [data-detail=teacher]').disabled, 'a detail is saved as it is typed');
       $('#class-details [data-detail=teacher]').click();
       step(board.getObjects().some(o => o.text === 'Mrs. "B"' && o.kbName === 'Teacher'), '+ puts it on the page');
-      const t = new fabric.Textbox("{Teacher}'s class, {Room}", { left: 50, top: 300, width: 400 }); board.add(t); commitDesign();
+      const t = new kbe.Textbox("{Teacher}'s class, {Room}", { left: 50, top: 300, width: 400 }); board.add(t); commitDesign();
       $('#class-fill').click();
       step(t.text === 'Mrs. "B"' + "'s class, {Room}", () => 'Fill in my details fills what is set and leaves the rest: ' + t.text);
       const doc = fillClassDoc({ pages: [{ objects: [{ type: 'Textbox', text: 'From {Teacher}' }] }], title: 'x' });
@@ -3314,11 +3314,16 @@ const html = ui('index.html')
   .replace('<head>', '<head><base href="file://' + path.join(__dirname, 'ui') + '/">')
   .replace('<script src="app.js"></script>', '<script>' + ui('app.js') + '</script>')
   .replace('<script src="photobar.js"></script>', () => '<script>' + ui('photobar.js') + '</script>')
-  .replace('<script src="vendor/fabric.min.js"></script>', () => '<script>' + ui('vendor/fabric.min.js') + '</script>')
-  .replace('<script src="vendor/fabric-extensions.min.js"></script>', () => '<script>' + ui('vendor/fabric-extensions.min.js') + '</script>')
-  .replace('<script src="vendor/jspdf.umd.min.js"></script>', () => '<script>' + ui('vendor/jspdf.umd.min.js') + '</script>')
-  .replace('<script src="vendor/qrcode.js"></script>', () => '<script>' + ui('vendor/qrcode.js') + '</script>')
-  .replace('<script src="vendor/qrcode_UTF8.js"></script>', () => '<script>' + ui('vendor/qrcode_UTF8.js') + '</script>')
+  .replace('<script src="engine/model.js"></script>', () => '<script>' + ui('engine/model.js') + '</script>')
+  .replace('<script src="engine/render.js"></script>', () => '<script>' + ui('engine/render.js') + '</script>')
+  .replace('<script src="engine/text.js"></script>', () => '<script>' + ui('engine/text.js') + '</script>')
+  .replace('<script src="engine/editor.js"></script>', () => '<script>' + ui('engine/editor.js') + '</script>')
+  .replace('<script src="engine/canvas.js"></script>', () => '<script>' + ui('engine/canvas.js') + '</script>')
+  .replace('<script src="engine/image.js"></script>', () => '<script>' + ui('engine/image.js') + '</script>')
+  .replace('<script src="engine/svg.js"></script>', () => '<script>' + ui('engine/svg.js') + '</script>')
+  .replace('<script src="engine/extras.js"></script>', () => '<script>' + ui('engine/extras.js') + '</script>')
+  .replace('<script src="pdf.js"></script>', () => '<script>' + ui('pdf.js') + '</script>')
+  .replace('<script src="qr.js"></script>', () => '<script>' + ui('qr.js') + '</script>')
   .replace('<script src="canva.js"></script>', '').replace('<script src="projects.js"></script>', '').replace('<script src="texttools.js"></script>', '').replace('<script src="decor.js"></script>', '').replace('<script src="charts.js"></script>', '').replace('<script src="fills.js"></script>', '').replace('<script src="tables.js"></script>', '').replace('<script src="myelements.js"></script>', '').replace('<script src="doctools.js"></script>', '').replace('<script src="viewtools.js"></script>', '').replace('<script src="phototools.js"></script>', '').replace('<script src="photolayers.js"></script>', '').replace('<script src="cutout.js"></script>', '').replace('<script src="straighten.js"></script>', '').replace('<script src="reshape.js"></script>', '').replace('<script src="stretch.js"></script>', '').replace('<script src="effects.js"></script>', '').replace('<script src="faces.js"></script>', '').replace('<script src="drawtools.js"></script>', '').replace('<script src="worksheets.js"></script>', '').replace('<script src="preschool.js"></script>', '').replace('<script src="photolayouts.js"></script>', '').replace('<script src="bulk.js"></script>', '').replace('<script src="classroom.js"></script>', '').replace('<script src="backup.js"></script>', '')
   .replace('<script src="create.js"></script>', () => '<script>' + ui('create.js') + '</script><script>' + ui('canva.js') + '</script><script>' + ui('projects.js') + '</script><script>' + ui('texttools.js') + '</script><script>' + ui('decor.js') + '</script><script>' + ui('charts.js') + '</script><script>' + ui('fills.js') + '</script><script>' + ui('tables.js') + '</script><script>' + ui('myelements.js') + '</script><script>' + ui('doctools.js') + '</script><script>' + ui('viewtools.js') + '</script><script>' + ui('phototools.js') + '</script><script>' + ui('photolayers.js') + '</script><script>' + ui('cutout.js') + '</script><script>' + ui('straighten.js') + '</script><script>' + ui('reshape.js') + '</script><script>' + ui('stretch.js') + '</script><script>' + ui('effects.js') + '</script><script>' + ui('faces.js') + '</script><script>' + ui('drawtools.js') + '</script><script>' + ui('worksheets.js') + '</script><script>' + ui('preschool.js') + '</script><script>' + ui('photolayouts.js') + '</script><script>' + ui('bulk.js') + '</script><script>' + ui('classroom.js') + '</script><script>' + ui('backup.js') + '</script>' + test);
 const file = path.join(temp, 'check.html');

@@ -35,7 +35,7 @@ function paintClassroom() {
 function addClassDetail(key, label) {
   const text = classroom()[key];
   if (!text || !board) return;
-  place(new fabric.Textbox(text, { fontFamily: settings.fonts[0] || FONTS[0], fill: textColour(), textAlign: 'center', width: 520, fontSize: 40, kbName: label }));
+  place(new kbe.Textbox(text, { fontFamily: settings.fonts[0] || FONTS[0], fill: textColour(), textAlign: 'center', width: 520, fontSize: 40, kbName: label }));
 }
 // Fill in my details on the design that's open, on every page.
 $('#class-fill').onclick = () => {

@@ -1,7 +1,7 @@
 // Create: a small Canva-style maker for posters, labels and cards. A design is a Fabric.js canvas in 96-dpi pixels,
 // saved as one JSON file (images embedded) in ~/Documents/KB Studio/ and printed through a 300-dpi PDF.
 // Needs `invoke`, `$` and `mode` from app.js.
-Object.assign(fabric.FabricObject.ownDefaults, { originX: 'left', originY: 'top' });
+Object.assign(kbe.FabricObject.ownDefaults, { originX: 'left', originY: 'top' });
 
 const PX = 96;                                         // design pixels per inch
 const PAGES = {
@@ -161,7 +161,7 @@ $('#photos-home').onclick = () => setMode('home');
 // ---- The page ----
 function startBoard() {
   if (board) return;
-  board = new fabric.Canvas($('#create-canvas'), { backgroundColor: '#ffffff', preserveObjectStacking: true, selection: true, fireRightClick: true, fireMiddleClick: true, stopContextMenu: true, controlsAboveOverlay: true });
+  board = new kbe.Canvas($('#create-canvas'), { backgroundColor: '#ffffff', preserveObjectStacking: true, selection: true, fireRightClick: true, fireMiddleClick: true, stopContextMenu: true, controlsAboveOverlay: true });
   // The canvas fills the stage and the page sits on a grey pasteboard, so things can hang off the edge
   // like in Canva. backgroundColor stays the page colour (saved and exported as before); only here is it
   // drawn as the page instead of the whole canvas. Whatever is off the page is faded by the overlay.
@@ -194,7 +194,7 @@ function startBoard() {
   board.on('object:removed', () => { if (!restoring) paintLayers(); });
   // The stage changes size with the window and when a drawer opens or closes.
   new ResizeObserver(() => { if (mode === 'create' && !cropSession && layoutBoard()) { if (fitted) fitBoard(); else clampView(); } }).observe($('#create-stage'));
-  guidelines = new fabricExtensions.AligningGuidelines(board);
+  guidelines = new kbe.AligningGuidelines(board);
   board.on('object:moving', snapPage);
   board.on('after:render', drawPageOverlay);
   board.on('mouse:up', () => { pageGuides = []; transforming = false; boardPan = null; $('#create-readout').hidden = true; board.requestRenderAll(); });
@@ -224,7 +224,7 @@ function startBoard() {
     openMenu(e.clientX, e.clientY);
   });
   board.on('path:created', e => { e.path.kbName = 'Drawing'; if (typeof drawnPath === 'function') drawnPath(e.path); commitDesign(); });
-  board.freeDrawingBrush = new fabric.PencilBrush(board);
+  board.freeDrawingBrush = new kbe.PencilBrush(board);
   board.freeDrawingBrush.color = '#444444'; board.freeDrawingBrush.width = 3;
   if (typeof startDrawTools === 'function') startDrawTools();
   // Ctrl+wheel zooms at the pointer; the wheel alone moves around (Shift for sideways).
@@ -314,7 +314,7 @@ function drawPageOverlay() {
 function drawFrameHint(ctx, o) {
   const c = o.getCenterPoint(), size = Math.min(o.getScaledWidth(), o.getScaledHeight()), s = Math.min(size / 6, 40);
   if (size * board.getZoom() < 36) return;
-  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(fabric.util.degreesToRadians(o.angle || 0));
+  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(kbe.util.degreesToRadians(o.angle || 0));
   ctx.strokeStyle = ctx.fillStyle = '#7a8090'; ctx.lineWidth = s / 10; ctx.lineJoin = 'round';
   const top = size * board.getZoom() > 120 ? -s * 0.8 : 0;
   ctx.strokeRect(-s, top - s * 0.7, s * 2, s * 1.4);
@@ -342,12 +342,12 @@ function clampView() {
 function zoomBoard(zoom, at) {
   if (!board || !design) return;
   fitted = false;
-  board.zoomToPoint(at || new fabric.Point(board.width / 2, board.height / 2), Math.min(4, Math.max(0.1, zoom)));
+  board.zoomToPoint(at || new kbe.Point(board.width / 2, board.height / 2), Math.min(4, Math.max(0.1, zoom)));
   clampView();
 }
 function panBy(dx, dy) {
   if (!board || !design || (!dx && !dy)) return;
-  fitted = false; board.relativePan(new fabric.Point(dx, dy)); clampView(); closeMenus();
+  fitted = false; board.relativePan(new kbe.Point(dx, dy)); clampView(); closeMenus();
 }
 function setSpacePan(on) {
   if (spacePan === on || !board) return;
@@ -565,7 +565,7 @@ const COMBOS = [
 ];
 function addCombo(index, at) {
   const [name, lines] = COMBOS[index], [w, h] = pagePx(), k = Math.min(1, w / 816), gap = 10 * k;
-  const texts = lines.map(([text, fontFamily, size, extra]) => new fabric.Textbox(text, { fontFamily, fontSize: Math.round(size * k), fill: textColour(), textAlign: 'center', width: Math.min(w - 48, 640 * k), ...extra, kbName: text.slice(0, 40) }));
+  const texts = lines.map(([text, fontFamily, size, extra]) => new kbe.Textbox(text, { fontFamily, fontSize: Math.round(size * k), fill: textColour(), textAlign: 'center', width: Math.min(w - 48, 640 * k), ...extra, kbName: text.slice(0, 40) }));
   const total = texts.reduce((n, t) => n + t.height, 0) + gap * (texts.length - 1), x = at ? at.x : w / 2;
   let y = (at ? at.y : h / 2) - total / 2;
   for (const t of texts) { t.set({ left: Math.round(x - t.width / 2), top: Math.round(y) }); y += t.height + gap; }
@@ -588,7 +588,7 @@ function paintCombos() {
 }
 function addText(preset, at) {
   const { text, ...style } = TEXT_PRESETS[preset] || { text: 'Double-click to edit', width: 420, fontSize: 40, kbName: 'Text' };
-  const t = new fabric.Textbox(text, { fontFamily: settings.fonts[0] || FONTS[0], fill: textColour(), textAlign: 'center', ...style });
+  const t = new kbe.Textbox(text, { fontFamily: settings.fonts[0] || FONTS[0], fill: textColour(), textAlign: 'center', ...style });
   place(t, at);
   t.enterEditing(); t.selectAll();
   return t;
@@ -596,24 +596,24 @@ function addText(preset, at) {
 const SHAPE = { fill: '#ffd966', stroke: '#444444', strokeWidth: 3 };
 function addShape(kind, at) {
   const shapes = {
-    rect: () => new fabric.Rect({ width: 260, height: 160, ...SHAPE, kbName: 'Rectangle' }),
-    rounded: () => new fabric.Rect({ width: 260, height: 160, rx: 24, ry: 24, ...SHAPE, kbName: 'Rounded rectangle' }),
-    triangle: () => new fabric.Triangle({ width: 200, height: 180, ...SHAPE, kbName: 'Triangle' }),
-    star: () => new fabric.Polygon(Array.from({ length: 10 }, (_, i) => { const a = i * Math.PI / 5 - Math.PI / 2, r = i % 2 ? 45 : 100; return { x: Math.cos(a) * r, y: Math.sin(a) * r }; }), { ...SHAPE, kbName: 'Star' }),
+    rect: () => new kbe.Rect({ width: 260, height: 160, ...SHAPE, kbName: 'Rectangle' }),
+    rounded: () => new kbe.Rect({ width: 260, height: 160, rx: 24, ry: 24, ...SHAPE, kbName: 'Rounded rectangle' }),
+    triangle: () => new kbe.Triangle({ width: 200, height: 180, ...SHAPE, kbName: 'Triangle' }),
+    star: () => new kbe.Polygon(Array.from({ length: 10 }, (_, i) => { const a = i * Math.PI / 5 - Math.PI / 2, r = i % 2 ? 45 : 100; return { x: Math.cos(a) * r, y: Math.sin(a) * r }; }), { ...SHAPE, kbName: 'Star' }),
     handwriting: () => handwritingLines(Math.min(500, pagePx()[0] - 96)),
-    bubble: () => new fabric.Path('M 20 0 L 240 0 Q 260 0 260 20 L 260 120 Q 260 140 240 140 L 90 140 L 40 180 L 50 140 L 20 140 Q 0 140 0 120 L 0 20 Q 0 0 20 0 Z', { ...SHAPE, kbName: 'Speech bubble' }),
-    circle: () => new fabric.Circle({ radius: 90, ...SHAPE, kbName: 'Circle' }),
-    line: () => new fabric.Line([0, 0, 300, 0], { stroke: '#444444', strokeWidth: 6, strokeLineCap: 'round', kbName: 'Line' }),
-    ...Object.fromEntries(LINE_STYLES.map(([key, name, dash]) => [key, () => new fabric.Line([0, 0, 300, 0], { stroke: '#444444', strokeWidth: 6, strokeLineCap: 'round', strokeDashArray: dash, kbName: name })])),
-    'double-line-arrow': () => new fabric.Group([
-      new fabric.Line([10, 0, 290, 0], { stroke: '#444444', strokeWidth: 6, strokeLineCap: 'round' }),
-      new fabric.Triangle({ width: 36, height: 36, fill: '#444444', left: 2, top: -18, angle: -90 }),
-      new fabric.Triangle({ width: 36, height: 36, fill: '#444444', left: 298, top: 18, angle: 90 })
+    bubble: () => new kbe.Path('M 20 0 L 240 0 Q 260 0 260 20 L 260 120 Q 260 140 240 140 L 90 140 L 40 180 L 50 140 L 20 140 Q 0 140 0 120 L 0 20 Q 0 0 20 0 Z', { ...SHAPE, kbName: 'Speech bubble' }),
+    circle: () => new kbe.Circle({ radius: 90, ...SHAPE, kbName: 'Circle' }),
+    line: () => new kbe.Line([0, 0, 300, 0], { stroke: '#444444', strokeWidth: 6, strokeLineCap: 'round', kbName: 'Line' }),
+    ...Object.fromEntries(LINE_STYLES.map(([key, name, dash]) => [key, () => new kbe.Line([0, 0, 300, 0], { stroke: '#444444', strokeWidth: 6, strokeLineCap: 'round', strokeDashArray: dash, kbName: name })])),
+    'double-line-arrow': () => new kbe.Group([
+      new kbe.Line([10, 0, 290, 0], { stroke: '#444444', strokeWidth: 6, strokeLineCap: 'round' }),
+      new kbe.Triangle({ width: 36, height: 36, fill: '#444444', left: 2, top: -18, angle: -90 }),
+      new kbe.Triangle({ width: 36, height: 36, fill: '#444444', left: 298, top: 18, angle: 90 })
     ], { kbName: 'Two-way arrow' }),
-    ...Object.fromEntries(NEW_SHAPES.map(([kind, name, w, h]) => [kind, () => new fabric.Path(SHAPE_PATHS[kind](w, h), { ...SHAPE, kbName: name })])),
-    arrow: () => new fabric.Group([
-      new fabric.Line([0, 0, 280, 0], { stroke: '#444444', strokeWidth: 6, strokeLineCap: 'round' }),
-      new fabric.Triangle({ width: 36, height: 36, fill: '#444444', left: 270, top: 18, angle: 90 })
+    ...Object.fromEntries(NEW_SHAPES.map(([kind, name, w, h]) => [kind, () => new kbe.Path(SHAPE_PATHS[kind](w, h), { ...SHAPE, kbName: name })])),
+    arrow: () => new kbe.Group([
+      new kbe.Line([0, 0, 280, 0], { stroke: '#444444', strokeWidth: 6, strokeLineCap: 'round' }),
+      new kbe.Triangle({ width: 36, height: 36, fill: '#444444', left: 270, top: 18, angle: 90 })
     ], { kbName: 'Arrow' })
   };
   return place(shapes[kind](), at);
@@ -631,7 +631,7 @@ const adding = new Set();
 const track = work => { adding.add(work); work.then(() => adding.delete(work), () => adding.delete(work)); return work; };
 const addImageBlob = (file, name, at) => track(addingImage(file, name, at));
 async function addingImage(file, name, at) {
-  const image = await fabric.FabricImage.fromURL(await shrink(file));
+  const image = await kbe.FabricImage.fromURL(await shrink(file));
   const [w, h] = pagePx(), k = Math.min(1, (w * 0.8) / image.width, (h * 0.8) / image.height);
   image.set({ scaleX: k, scaleY: k, kbName: name ? 'Photo ' + name : 'Picture' });
   return place(image, at);
@@ -662,7 +662,7 @@ async function readDropped(uri) {
 }
 // The whole batch is one tracked job, so closing mid-import still waits for the files not started yet.
 const importFiles = (files, at) => track((async () => {
-  for (const [i, file] of files.entries()) await addImageBlob(file, file.name.replace(/\.[^.]*$/, ''), at && new fabric.Point(at.x + i * 24, at.y + i * 24)).catch(e => { $('#create-saved').textContent = `Could not add ${file.name}: ${e}`; });
+  for (const [i, file] of files.entries()) await addImageBlob(file, file.name.replace(/\.[^.]*$/, ''), at && new kbe.Point(at.x + i * 24, at.y + i * 24)).catch(e => { $('#create-saved').textContent = `Could not add ${file.name}: ${e}`; });
 })());
 $('#create-file').onchange = async event => {
   const files = [...event.target.files], frame = board.getActiveObject();
@@ -677,7 +677,7 @@ async function addingEmoji(code, at) {
   const img = await new Promise((done, fail) => Object.assign(new Image(), { onload() { done(this); }, onerror: () => fail('clip art missing'), src: `emoji/${code}.svg` }));
   const out = Object.assign(document.createElement('canvas'), { width: 512, height: 512 });
   out.getContext('2d').drawImage(img, 0, 0, 512, 512);
-  const image = await fabric.FabricImage.fromURL(out.toDataURL('image/png'));
+  const image = await kbe.FabricImage.fromURL(out.toDataURL('image/png'));
   image.set({ scaleX: 150 / 512, scaleY: 150 / 512, kbName: emojiEntries.find(e => e.code === code)?.name || 'Clip art' });
   return place(image, at);
 }
@@ -724,9 +724,9 @@ const FRAME_TILES = [
 ];
 // `kind` is 'rect', 'rounded', 'circle' (a circle uses the smaller side) or one of FRAME_NAMES.
 const makeFrame = (width, height, kind = 'rect', o = {}) => kind === 'circle'
-  ? new fabric.Circle({ radius: Math.min(width, height) / 2, fill: FRAME_FILL, strokeWidth: 0, kbFrame: 'circle', kbName: 'Photo frame', ...o })
-  : FRAME_NAMES[kind] ? new fabric.Path(framePath(kind, width, height), { fill: FRAME_FILL, strokeWidth: 0, kbFrame: kind, kbName: 'Photo frame', ...o })
-  : new fabric.Rect({ width, height, rx: kind === 'rounded' ? width / 8 : 0, ry: kind === 'rounded' ? height / 8 : 0, fill: FRAME_FILL, strokeWidth: 0, kbFrame: kind, kbName: 'Photo frame', ...o });
+  ? new kbe.Circle({ radius: Math.min(width, height) / 2, fill: FRAME_FILL, strokeWidth: 0, kbFrame: 'circle', kbName: 'Photo frame', ...o })
+  : FRAME_NAMES[kind] ? new kbe.Path(framePath(kind, width, height), { fill: FRAME_FILL, strokeWidth: 0, kbFrame: kind, kbName: 'Photo frame', ...o })
+  : new kbe.Rect({ width, height, rx: kind === 'rounded' ? width / 8 : 0, ry: kind === 'rounded' ? height / 8 : 0, fill: FRAME_FILL, strokeWidth: 0, kbFrame: kind, kbName: 'Photo frame', ...o });
 // Photo grids, as in Canva: empty frames filling the page edge to edge with thin gaps, ready for photos.
 // Each layout is a list of [x, y, width, height] as fractions of the page.
 const GRIDS = [
@@ -764,7 +764,7 @@ const frameKind = o => o.kbFrame || clipKind(o);
 // The picture takes the target's place, size, angle and frame shape, cropped from its middle to fill it, as in Canva.
 const fillFrame = (target, file, name) => track(fillingFrame(target, file, name));
 async function fillingFrame(target, file, name) {
-  const image = await fabric.FabricImage.fromURL(await shrink(file)), faces = await faceBox(image);
+  const image = await kbe.FabricImage.fromURL(await shrink(file)), faces = await faceBox(image);
   image.kbName = name ? 'Photo ' + name : 'Picture';
   if (!board.getObjects().includes(target)) return place(image, target.getCenterPoint()); // undone or deleted meanwhile
   fitInFrame(image, target, faces);
@@ -942,7 +942,7 @@ $('#emoji-prev').onclick = () => { emojiPage--; paintEmoji(); };
 $('#emoji-next').onclick = () => { emojiPage++; paintEmoji(); };
 
 function handwritingLines(width) {
-  return new fabric.Group([0, 24, 48].map((y, i) => new fabric.Line([0, y, width, y], { stroke: '#777777', strokeWidth: 1, strokeDashArray: i === 1 ? [6, 4] : null })), { kbName: 'Handwriting lines' });
+  return new kbe.Group([0, 24, 48].map((y, i) => new kbe.Line([0, y, width, y], { stroke: '#777777', strokeWidth: 1, strokeDashArray: i === 1 ? [6, 4] : null })), { kbName: 'Handwriting lines' });
 }
 function tableCells(rows, cols, top = 180, height = Math.min(rows * 72, pagePx()[1] - top - 48), text = 'Text', pageWidth = pagePx()[0]) {
   if (![rows, cols].every(n => Number.isInteger(n) && n >= 1 && n <= 20)) throw Error('Use 1 to 20 rows and columns');
@@ -960,15 +960,16 @@ function addTable(rows, cols) {
 $('#create-table').onsubmit = e => { e.preventDefault(); addTable(Number($('#table-rows').value), Number($('#table-cols').value)); };
 function addQr(text) {
   if (!text.trim() || text.length > 1000) throw Error('Enter up to 1,000 characters');
-  const qr = qrcode(0, 'M'); qr.addData(text, 'Byte'); qr.make();
-  const count = qr.getModuleCount(), path = [];
+  let qr;
+  try { qr = makeQr(text); } catch { throw Error('That is too much text for a QR code'); }
+  const count = qr.count, path = [];
   for (let row = 0; row < count; row++) for (let col = 0; col < count; col++) {
     if (qr.isDark(row, col)) path.push(`M ${col + 4} ${row + 4} h 1 v 1 h -1 z`);
   }
   // A white four-module quiet zone is part of the object, so coloured pages remain scannable.
-  return place(new fabric.Group([
-    new fabric.Rect({ width: count + 8, height: count + 8, fill: '#ffffff', strokeWidth: 0 }),
-    new fabric.Path(path.join(' '), { fill: '#000000', strokeWidth: 0 })
+  return place(new kbe.Group([
+    new kbe.Rect({ width: count + 8, height: count + 8, fill: '#ffffff', strokeWidth: 0 }),
+    new kbe.Path(path.join(' '), { fill: '#000000', strokeWidth: 0 })
   ], { scaleX: 200 / (count + 8), scaleY: 200 / (count + 8), kbName: 'QR code' }));
 }
 $('#create-qr').onsubmit = e => {
@@ -992,7 +993,7 @@ function alignTo(id, vertical, shift) {
 }
 function selectObjects(objects) {
   board.discardActiveObject();
-  if (objects.length) board.setActiveObject(objects.length === 1 ? objects[0] : new fabric.ActiveSelection(objects, { canvas: board }));
+  if (objects.length) board.setActiveObject(objects.length === 1 ? objects[0] : new kbe.ActiveSelection(objects, { canvas: board }));
   board.requestRenderAll(); paintPanel();
 }
 function distribute(vertical) {
@@ -1019,7 +1020,7 @@ function groupSelected(ungroup = false) {
     if (objects.length < 2) return;
     const index = Math.min(...objects.map(o => board.getObjects().indexOf(o)));
     board.discardActiveObject(); board.remove(...objects);
-    const group = new fabric.Group(objects, { kbName: 'Group' });
+    const group = new kbe.Group(objects, { kbName: 'Group' });
     // Fabric keeps old child bounds unless nested hit testing is enabled; guides need local bounds.
     objects.forEach(o => o.setCoords()); board.insertAt(index, group); selectObjects([group]);
   }
@@ -1170,7 +1171,7 @@ function change(props) {
   for (const o of targets) { o.set(typeof props === 'function' ? props(o) : props); o.setCoords(); }
   board.requestRenderAll(); commitDesign();
 }
-$('#prop-fill').oninput = e => change(o => o.type === 'line' || o.kbEffect === 'hollow' ? { stroke: e.target.value } : o.kbEffect === 'neon' ? { fill: e.target.value, shadow: new fabric.Shadow({ ...o.shadow, color: e.target.value }) } : { fill: e.target.value });
+$('#prop-fill').oninput = e => change(o => o.type === 'line' || o.kbEffect === 'hollow' ? { stroke: e.target.value } : o.kbEffect === 'neon' ? { fill: e.target.value, shadow: new kbe.Shadow({ ...o.shadow, color: e.target.value }) } : { fill: e.target.value });
 $('#prop-stroke').oninput = e => change({ stroke: e.target.value, paintFirst: 'stroke' });
 $('#prop-fill').onchange = $('#prop-stroke').onchange = () => paintPanel();
 $('#prop-font').onchange = e => change(o => o.type === 'textbox' ? { fontFamily: e.target.value } : {});
@@ -1199,7 +1200,7 @@ const BLENDS = [...document.querySelectorAll('#prop-blend option')].map(o => o.v
 $('#prop-width').onchange = e => change(o => ({ strokeWidth: bounded(e, 0, 100), stroke: o.stroke || $('#prop-stroke').value, paintFirst: 'stroke' }));
 $('#prop-dash').onchange = e => change({ strokeDashArray: e.target.value === 'solid' ? null : e.target.value === 'dot' ? [1, 5] : [8, 5] });
 $('#prop-corners').onchange = e => change(o => o.type === 'rect' ? { rx: bounded(e, 0, 200), ry: bounded(e, 0, 200) } : {});
-$('#prop-shadow').onchange = e => change({ shadow: e.target.checked ? new fabric.Shadow({ color: '#00000055', blur: 10, offsetX: 6, offsetY: 6 }) : null });
+$('#prop-shadow').onchange = e => change({ shadow: e.target.checked ? new kbe.Shadow({ color: '#00000055', blur: 10, offsetX: 6, offsetY: 6 }) : null });
 $('#prop-flip-x').onclick = () => change(o => ({ flipX: !o.flipX }));
 $('#prop-flip-y').onclick = () => change(o => ({ flipY: !o.flipY }));
 $('#prop-italic').onclick = () => change(o => o.type === 'textbox' ? { fontStyle: o.fontStyle === 'italic' ? 'normal' : 'italic' } : {});
@@ -1214,11 +1215,11 @@ function textEffect(o, kind) {
   const plain = { kbEffect: kind === 'none' ? undefined : kind, fill: colour, stroke: null, strokeWidth: 1, paintFirst: 'fill', shadow: null };
   return {
     none: plain,
-    shadow: { ...plain, shadow: new fabric.Shadow({ color: '#00000066', blur: size / 10, offsetX: size / 14, offsetY: size / 14 }) },
-    lift: { ...plain, shadow: new fabric.Shadow({ color: '#00000059', blur: size / 3, offsetX: 0, offsetY: size / 8 }) },
+    shadow: { ...plain, shadow: new kbe.Shadow({ color: '#00000066', blur: size / 10, offsetX: size / 14, offsetY: size / 14 }) },
+    lift: { ...plain, shadow: new kbe.Shadow({ color: '#00000059', blur: size / 3, offsetX: 0, offsetY: size / 8 }) },
     hollow: { ...plain, fill: 'transparent', stroke: colour, strokeWidth: Math.max(1, size / 22) },
     outline: { ...plain, stroke: hex(colour) && parseInt(hex(colour).slice(1), 16) < 0x808080 ? '#ffffff' : '#222222', strokeWidth: Math.max(2, size / 9), paintFirst: 'stroke' },
-    neon: { ...plain, shadow: new fabric.Shadow({ color: colour, blur: size / 2.5, offsetX: 0, offsetY: 0 }) }
+    neon: { ...plain, shadow: new kbe.Shadow({ color: colour, blur: size / 2.5, offsetX: 0, offsetY: 0 }) }
   }[kind] || plain;
 }
 $('#text-effects').replaceChildren(...TEXT_EFFECTS.map(([kind, label]) => {
@@ -1230,13 +1231,13 @@ $('#prop-highlight-on').onchange = $('#prop-highlight').oninput = highlight;
 function pictureFrame(image, kind) {
   const options = { width: image.width, height: image.height, originX: 'center', originY: 'center' };
   // left/top 0: without them a Path places itself at its own bounds, which shifts the clip half off the picture.
-  if (FRAME_NAMES[kind]) return new fabric.Path(framePath(kind, image.width, image.height), { left: 0, top: 0, originX: 'center', originY: 'center', kbFrame: kind });
-  return kind === 'none' ? null : kind === 'circle' ? new fabric.Circle({ originX: 'center', originY: 'center', radius: Math.min(image.width, image.height) / 2 }) : new fabric.Rect({ ...options, rx: kind === 'rounded' ? image.width / 8 : 0, ry: kind === 'rounded' ? image.height / 8 : 0 });
+  if (FRAME_NAMES[kind]) return new kbe.Path(framePath(kind, image.width, image.height), { left: 0, top: 0, originX: 'center', originY: 'center', kbFrame: kind });
+  return kind === 'none' ? null : kind === 'circle' ? new kbe.Circle({ originX: 'center', originY: 'center', radius: Math.min(image.width, image.height) / 2 }) : new kbe.Rect({ ...options, rx: kind === 'rounded' ? image.width / 8 : 0, ry: kind === 'rounded' ? image.height / 8 : 0 });
 }
 $('#prop-frame').onchange = e => change(o => o.type === 'image' ? { clipPath: pictureFrame(o, e.target.value) } : {});
 // Designs saved before 0.52.2 carry that shifted clip; a frame clip always sits on the picture's centre, so every load recentres it.
-const imageFromObject = fabric.FabricImage.fromObject.bind(fabric.FabricImage);
-fabric.FabricImage.fromObject = async (...args) => {
+const imageFromObject = kbe.FabricImage.fromObject.bind(kbe.FabricImage);
+kbe.FabricImage.fromObject = async (...args) => {
   const image = await imageFromObject(...args);
   if (image.clipPath?.kbFrame) image.clipPath.set({ left: 0, top: 0 });
   return image;
@@ -1414,7 +1415,7 @@ async function startPictureCrop() {
   for (const [o] of cropSession.targets) o.set({ selectable: false, evented: false });
   board.selection = board.isDrawingMode = false; board.setActiveObject(image);
   guidelines.dispose(); pageGuides = [];
-  fabricExtensions.enterCropMode({ target: image });
+  kbe.enterCropMode({ target: image });
   image.on('mousedblclick', cropDoubleClick);
   dialog.append(stage); dialog.showModal(); fitBoard(); board.calcOffset(); board.requestRenderAll();
 }
@@ -1430,7 +1431,7 @@ function finishCrop(apply, exited = false) {
   for (const [o, selectable, evented] of targets) o.set({ selectable, evented });
   board.selection = selection; board.isDrawingMode = drawing;
   parent.insertBefore($('#create-stage'), next); $('#create-crop-dialog').close();
-  cropSession = null; guidelines = new fabricExtensions.AligningGuidelines(board);
+  cropSession = null; guidelines = new kbe.AligningGuidelines(board);
   board.off('object:moving', snapPage); board.on('object:moving', snapPage); // Page snapping still runs after object guides.
   layoutBoard(); board.setViewportTransform(view); fitted = wasFitted; image.setCoords(); board.calcOffset();
   if (apply) commitDesign();
@@ -1447,7 +1448,7 @@ function copySelected(cut = false) {
 function pasteSelected(source = designClipboard) {
   if (!source?.length) return Promise.resolve();
   return track((async () => {
-    const copies = await fabric.util.enlivenObjects(source);
+    const copies = await kbe.util.enlivenObjects(source);
     for (const copy of copies) { copy.set({ left: copy.left + 24, top: copy.top + 24 }); applyLock(copy); }
     board.add(...copies); selectObjects(copies); commitDesign();
   })().catch(e => { $('#create-saved').textContent = 'Could not paste: ' + e; }));
@@ -1643,7 +1644,7 @@ function placeRotateHandle(o) {
   if (!mtr || !o.hasControls || transforming) return;
   const edge = 8 + (typeof rulersOn === 'function' && rulersOn() ? RULER : 0);
   const reachable = () => { o.setCoords(); const c = o.oCoords.mtr; return c.x >= edge && c.y >= edge && c.x <= board.width - 8 && c.y <= board.height - 8; };
-  const side = y => { const now = o.controls.mtr; if (now.y !== y) o.controls = { ...o.controls, mtr: new fabric.Control({ ...now, y, offsetY: y < 0 ? -40 : 40 }) }; };
+  const side = y => { const now = o.controls.mtr; if (now.y !== y) o.controls = { ...o.controls, mtr: new kbe.Control({ ...now, y, offsetY: y < 0 ? -40 : 40 }) }; };
   side(-0.5);
   if (reachable()) return;
   side(0.5);
@@ -1694,7 +1695,7 @@ const templateThumbs = new Map();
 const cached = (key, make) => { if (!templateThumbs.has(key)) templateThumbs.set(key, make().catch(error => { templateThumbs.delete(key); throw error; })); return templateThumbs.get(key); };
 async function drawThumb(size, build, width = 280) {
   await fonts().catch(() => {});
-  const [w, h] = size.map(v => Math.round(v * PX)), sc = new fabric.StaticCanvas(document.createElement('canvas'), { width: w, height: h, backgroundColor: '#ffffff' });
+  const [w, h] = size.map(v => Math.round(v * PX)), sc = new kbe.StaticCanvas(document.createElement('canvas'), { width: w, height: h, backgroundColor: '#ffffff' });
   try { await build(sc); sc.renderAll(); return sc.toDataURL({ format: 'png', multiplier: width / w }); } finally { sc.dispose(); }
 }
 function templateThumb(name, source, modified) {
@@ -1910,7 +1911,7 @@ $('#colour-save').onclick = () => {
 // Draw the design on a fresh canvas so the screen's zoom and selection never get in.
 async function render(multiplier, format, quality = 0.92, page = board.toObject(KEEP)) {
   await fonts();
-  const [w, h] = pagePx(), sc = new fabric.StaticCanvas(document.createElement('canvas'), { width: w, height: h });
+  const [w, h] = pagePx(), sc = new kbe.StaticCanvas(document.createElement('canvas'), { width: w, height: h });
   try {
     await sc.loadFromJSON(page);
     return sc.toDataURL({ format, quality, multiplier, enableRetinaScaling: false });
@@ -1926,19 +1927,19 @@ async function makePdf() {
   const images = [];
   for (const page of allPages()) images.push(await render(DPI / PX, 'jpeg', 0.92, page));
   const links = typeof linksOf === 'function' ? await Promise.all(allPages().map(linksOf)) : [];
-  const pdf = new window.jspdf.jsPDF({ unit: 'in', format: [sw, sh], orientation: sw > sh ? 'landscape' : 'portrait', compress: true });
+  const pdf = new window.KBPdf([sw, sh]);
   for (const [n, sheet] of sheetPlan(images.length, layout, design.tile, design.copies).entries()) {
-    if (n) pdf.addPage([sw, sh], sw > sh ? 'landscape' : 'portrait');
+    if (n) pdf.addPage([sw, sh]);
     for (const [k, t] of layout.tiles.entries()) {
       const i = sheet[k];
       if (i === undefined) continue;
-      pdf.addImage(images[i], 'JPEG', t.x, t.y, pw, ph, 'page' + i, 'FAST');
+      pdf.addImage(images[i], t.x, t.y, pw, ph, 'page' + i);
       for (const l of links[i] || []) pdf.link(t.x + l.x / PX, t.y + l.y / PX, l.w / PX, l.h / PX, { url: l.url }); // clickable in the PDF
     }
     pdf.setDrawColor(110); pdf.setLineWidth(0.01);
     for (const [x1, y1, x2, y2] of layout.marks) pdf.line(x1, y1, x2, y2);
   }
-  return new Uint8Array(pdf.output('arraybuffer'));
+  return pdf.output();
 }
 // Download: a Save dialog (Downloads the first time, then wherever she saved last) with the name filled in; several
 // pictures ask for a folder instead. Then a card says where it went, with buttons to open it or show it.
@@ -2071,8 +2072,8 @@ document.addEventListener('keyup', event => { if (event.key === ' ') setSpacePan
 addEventListener('blur', () => setSpacePan(false));
 
 // ---- Starter templates: placeholder words only. Each fills the canvas it is given (the page, or a thumbnail) ----
-const T = (text, left, top, o = {}) => new fabric.Textbox(text, { left, top, width: 300, fontSize: 28, fontFamily: 'Lexend', fill: '#222222', kbName: 'Text', ...o });
-const R = (left, top, width, height, o = {}) => new fabric.Rect({ left, top, width, height, fill: 'transparent', stroke: '#444444', strokeWidth: 2, kbName: 'Box', ...o });
+const T = (text, left, top, o = {}) => new kbe.Textbox(text, { left, top, width: 300, fontSize: 28, fontFamily: 'Lexend', fill: '#222222', kbName: 'Text', ...o });
+const R = (left, top, width, height, o = {}) => new kbe.Rect({ left, top, width, height, fill: 'transparent', stroke: '#444444', strokeWidth: 2, kbName: 'Box', ...o });
 const STARTERS = {
   'Behaviour chart': async page => {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], x0 = 40, y0 = 190, cw = 100, rh = 100, label = 276;
@@ -2136,7 +2137,7 @@ const STARTERS = {
   'Birthday card': async page => {
     const dots = ['#f6b26b', '#93c47d', '#6fa8dc', '#e06666', '#ffd966', '#c27ba0'];
     page.add(R(0, 0, 816, 1056, { fill: '#fdf3f8', stroke: '#fdf3f8', kbName: 'Background' }));
-    for (let i = 0; i < 24; i++) page.add(new fabric.Circle({ left: 40 + (i * 151) % 700, top: 40 + (i * 89) % 180 + (i % 2) * 760, radius: 8 + (i * 7) % 12, fill: dots[i % dots.length], kbName: 'Confetti' }));
+    for (let i = 0; i < 24; i++) page.add(new kbe.Circle({ left: 40 + (i * 151) % 700, top: 40 + (i * 89) % 180 + (i % 2) * 760, radius: 8 + (i * 7) % 12, fill: dots[i % dots.length], kbName: 'Confetti' }));
     page.add(T('Happy Birthday', 48, 300, { width: 720, fontSize: 96, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: '#c2185b', kbName: 'Title' }),
       T('Name', 48, 460, { width: 720, fontSize: 88, textAlign: 'center', fontFamily: 'Caveat', kbName: 'Name' }),
       T('Have a wonderful day!', 48, 610, { width: 720, fontSize: 36, textAlign: 'center' }),

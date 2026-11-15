@@ -313,7 +313,7 @@ $('#cut-sticker').onclick = () => cutQueued(async () => {
     ctx.globalCompositeOperation = 'source-over';
   }
   ctx.drawImage(piece, outline, outline);
-  const sticker = await fabric.FabricImage.fromURL(sheet.toDataURL('image/png'));
+  const sticker = await kbe.FabricImage.fromURL(sheet.toDataURL('image/png'));
   sticker.set({ scaleX: image.scaleX, scaleY: image.scaleY, angle: image.angle, flipX: image.flipX, flipY: image.flipY, kbName: 'Sticker' });
   sticker.setPositionByOrigin(fromPicture(image, [(kept.x + kept.w / 2) / cut.w, (kept.y + kept.h / 2) / cut.h]), 'center', 'center');
   board.add(sticker); sticker.setCoords();

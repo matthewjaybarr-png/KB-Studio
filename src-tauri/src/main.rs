@@ -3,6 +3,7 @@
 // The one network call is the update check, made here in Rust; the webview stays offline.
 #[allow(dead_code)] // copied whole; not every function is used yet
 mod backup;
+mod cr2;
 mod creations;
 mod cutout;
 mod focus;
@@ -22,10 +23,6 @@ mod pptx;
 mod retouch;
 mod see_through;
 
-use rawler::formats::tiff::reader::TiffReader;
-use rawler::formats::tiff::GenericTiffReader;
-use rawler::rawsource::RawSource;
-use rawler::tags::TiffCommonTag;
 use retouch::{Retouching, Session, Stroke};
 use serde::Serialize;
 use serde_json::Value;
@@ -92,44 +89,21 @@ fn shoot_file(dir: &str, name: &str) -> Result<PathBuf, String> {
     Ok(Path::new(dir).join(name))
 }
 
-/// The full-size JPEG Canon stores in CR2 IFD0, found with rawler's TIFF reader (no decode),
-/// with its Orientation tag injected as a tiny EXIF block so the webview rotates it like any JPEG.
-// ponytail: CR2 only; CR3 is ISO-BMFF and needs rawler's CR3 path when a newer body arrives.
+/// The full-size JPEG Canon stores in CR2 IFD0, with its Orientation tag injected as a tiny EXIF
+/// block so the webview rotates it like any JPEG.
+// ponytail: CR2 only; CR3 is ISO-BMFF and needs its own reader when a newer body arrives.
 fn cr2_preview(path: &Path) -> Result<Vec<u8>, String> {
-    let (source, tiff) = cr2_open(path)?;
-    let ifd0 = tiff.root_ifd();
-    if !ifd0.contains_singlestrip_image() {
-        return Err("CR2 has no embedded preview".into());
-    }
-    let jpeg = ifd0
-        .singlestrip_data_rawsource(&source)
-        .map_err(|e| format!("CR2 preview unreadable: {e}"))?;
-    if !jpeg.starts_with(&[0xFF, 0xD8]) {
-        return Err("CR2 embedded preview is not a JPEG".into());
-    }
-    let orientation = cr2_orientation(&tiff);
+    let bytes = read_cr2(path)?;
+    let jpeg = cr2::preview(&bytes)?;
+    let orientation = cr2::orientation(&bytes)?;
     let mut exif = b"\xFF\xE1\0\x22Exif\0\0II*\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0".to_vec();
     exif.extend_from_slice(&orientation.to_le_bytes());
     exif.extend_from_slice(&[0; 6]);
     Ok([&jpeg[..2], &exif, &jpeg[2..]].concat())
 }
 
-fn cr2_open(path: &Path) -> Result<(RawSource, GenericTiffReader), String> {
-    let source =
-        RawSource::new(path).map_err(|e| format!("could not open {}: {e}", path.display()))?;
-    if source.buf().get(8..10) != Some(b"CR") {
-        return Err("not a Canon CR2 file".into());
-    }
-    let tiff = GenericTiffReader::new_with_buffer(source.buf(), 0, 0, Some(1))
-        .map_err(|e| format!("CR2 unreadable: {e}"))?;
-    Ok((source, tiff))
-}
-
-/// EXIF orientation (1–8) from CR2 IFD0. rawler reports these files as Normal, so read the tag.
-fn cr2_orientation(tiff: &GenericTiffReader) -> u16 {
-    tiff.root_ifd()
-        .get_entry(TiffCommonTag::Orientation)
-        .map_or(1, |e| e.value.force_u16(0))
+fn read_cr2(path: &Path) -> Result<Vec<u8>, String> {
+    fs::read(path).map_err(|e| format!("could not open {}: {e}", path.display()))
 }
 
 /// Longest edge of the image Develop edits. Export (Step 3) will decode at full size.
@@ -138,26 +112,10 @@ const DEVELOP_EDGE: usize = 3072;
 /// A CR2 decoded to linear light (sRGB primaries, camera white balance, values above 1 kept
 /// for highlight recovery), box-downscaled to at most `max_edge` and turned upright.
 fn raw_linear(path: &Path, max_edge: usize) -> Result<(usize, usize, Vec<f32>), String> {
-    use rawler::imgop::develop::{Intermediate, ProcessingStep::*, RawDevelop};
-    let (source, tiff) = cr2_open(path)?;
-    let raw = rawler::decode(&source, &Default::default())
-        .map_err(|e| format!("could not decode {}: {e}", path.display()))?;
-    let steps = [
-        Rescale,
-        Demosaic,
-        CropActiveArea,
-        WhiteBalance,
-        Calibrate,
-        CropDefault,
-    ];
-    let Intermediate::ThreeColor(rgb) = RawDevelop::new_with(&steps)
-        .develop_intermediate(&raw)
-        .map_err(|e| format!("could not develop {}: {e}", path.display()))?
-    else {
-        return Err("not a colour RAW file".into());
-    };
-    let (w, h, small) = downscale(rgb.width, rgb.height, &rgb.data, max_edge);
-    Ok(orient(w, h, &small, cr2_orientation(&tiff)))
+    let bytes = read_cr2(path)?;
+    let (w, h, small) = cr2::develop(&bytes, max_edge)
+        .map_err(|e| format!("could not develop {}: {e}", path.display()))?;
+    Ok(orient(w, h, &small, cr2::orientation(&bytes)?))
 }
 
 /// Average f x f blocks, with f the smallest whole factor that fits `max_edge`.
@@ -2162,6 +2120,21 @@ mod tests {
         listing(&state, &mut after);
         assert_eq!(state.exists(), existed, "state dir created");
         assert!(before == after, "state dir changed");
+    }
+
+    /// A/B helper: dump what Develop loads for one CR2 as little-endian f32 RGB (w, h as u32 first).
+    /// SHOOT_DIR=/dir RAW_NAME=x.cr2 DUMP_OUT=/path cargo test --release dump_develop -- --ignored
+    #[test]
+    #[ignore]
+    fn dump_develop() {
+        let dir = std::env::var("SHOOT_DIR").expect("set SHOOT_DIR");
+        let name = std::env::var("RAW_NAME").expect("set RAW_NAME");
+        let (w, h, rgb) = raw_linear(&shoot_file(&dir, &name).unwrap(), DEVELOP_EDGE).unwrap();
+        let mut out = Vec::new();
+        out.extend_from_slice(&(w as u32).to_le_bytes());
+        out.extend_from_slice(&(h as u32).to_le_bytes());
+        rgb.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
+        fs::write(std::env::var("DUMP_OUT").expect("set DUMP_OUT"), out).unwrap();
     }
 
     /// Retouch speed on real photos (reads only): SHOOT_DIR=/path cargo test --release retouch_timing -- --ignored --nocapture

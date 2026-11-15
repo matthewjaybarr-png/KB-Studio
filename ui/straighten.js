@@ -101,7 +101,7 @@ async function straightenPicture() {
     const box = image.getBoundingRect(), [pw, ph] = pagePx();
     const whole = designPages.length === 1 && design.page === 'custom' && !image.angle && Math.abs(box.left) < 1 && Math.abs(box.top) < 1 && Math.abs(box.width - pw) < 1 && Math.abs(box.height - ph) < 1;
     const place = o => {
-      if (!whole) return o.setPositionByOrigin(new fabric.Point(middle.x, middle.y), 'center', 'center');
+      if (!whole) return o.setPositionByOrigin(new kbe.Point(middle.x, middle.y), 'center', 'center');
       design.size = [ow, oh].map(v => Math.min(MAX_SIDE, Math.max(1, Math.round(v / DPI * 1000) / 1000)));
       const k = pagePx()[0] / ow;
       o.set({ left: 0, top: 0, scaleX: k, scaleY: k });
@@ -135,10 +135,10 @@ async function splitScan() {
       const ow = new DataView(out.buffer).getUint32(0, true), oh = new DataView(out.buffer).getUint32(4, true);
       const canvas = pictureCanvas(ow, oh);
       canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(out.buffer, 8, ow * oh * 4), ow, oh), 0, 0);
-      const photo = await fabric.FabricImage.fromURL(canvas.toDataURL(work.clear ? 'image/png' : 'image/jpeg', 0.92));
+      const photo = await kbe.FabricImage.fromURL(canvas.toDataURL(work.clear ? 'image/png' : 'image/jpeg', 0.92));
       const middle = corners.map(uv => fromPicture(image, uv)).reduce((m, p) => ({ x: m.x + p.x / 4, y: m.y + p.y / 4 }), { x: 0, y: 0 });
       photo.set({ scaleX: Math.abs(image.scaleX), scaleY: Math.abs(image.scaleY), kbName: `Photo ${i + 1} from the scan` });
-      photo.setPositionByOrigin(new fabric.Point(middle.x, middle.y), 'center', 'center'); photo.setCoords();
+      photo.setPositionByOrigin(new kbe.Point(middle.x, middle.y), 'center', 'center'); photo.setCoords();
       photos.push(photo);
     }
     if (straightGone()) return;

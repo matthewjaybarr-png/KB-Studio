@@ -38,12 +38,12 @@ const cuttingOut = () => typeof cutting === 'function' && cutting();
 // A picture's own pixels for a point on the page (0–1 across and down), and back again.
 const naturalSize = image => { const el = image.getElement(); return [el.naturalWidth || el.width, el.naturalHeight || el.height]; };
 function toPicture(image, at) {
-  const p = fabric.util.transformPoint(at, fabric.util.invertTransform(image.calcTransformMatrix())), [nw, nh] = naturalSize(image);
+  const p = kbe.util.transformPoint(at, kbe.util.invertTransform(image.calcTransformMatrix())), [nw, nh] = naturalSize(image);
   return [(p.x + image.width / 2 + (image.cropX || 0)) / nw, (p.y + image.height / 2 + (image.cropY || 0)) / nh];
 }
 function fromPicture(image, [u, v]) {
   const [nw, nh] = naturalSize(image);
-  return fabric.util.transformPoint(new fabric.Point(u * nw - (image.cropX || 0) - image.width / 2, v * nh - (image.cropY || 0) - image.height / 2), image.calcTransformMatrix());
+  return kbe.util.transformPoint(new kbe.Point(u * nw - (image.cropX || 0) - image.width / 2, v * nh - (image.cropY || 0) - image.height / 2), image.calcTransformMatrix());
 }
 const onPicture = ([u, v]) => u >= 0 && v >= 0 && u <= 1 && v <= 1;
 // The brush is sized on screen, as in Canva, whatever picture is under it. A stroke stores it as a share of that
@@ -67,7 +67,7 @@ function alphaAt(image, [u, v]) {
 }
 // Anywhere inside the brush counts, so a stroke can start just beside a small leaf and still catch it.
 function pictureAt(at, r = board ? touch.px / board.getZoom() : 0) {
-  const spots = [at, ...[0.5, 1].flatMap(k => Array.from({ length: 8 }, (_, i) => new fabric.Point(at.x + k * r * Math.cos(i * Math.PI / 4), at.y + k * r * Math.sin(i * Math.PI / 4))))];
+  const spots = [at, ...[0.5, 1].flatMap(k => Array.from({ length: 8 }, (_, i) => new kbe.Point(at.x + k * r * Math.cos(i * Math.PI / 4), at.y + k * r * Math.sin(i * Math.PI / 4))))];
   return board.getObjects().slice().reverse().find(o => o.type === 'image' && o.visible !== false && spots.some(p => {
     if (!o.containsPoint(p)) return false;
     const uv = toPicture(o, p);
@@ -252,7 +252,7 @@ function editPhoto(file) {
     const name = file.name.replace(/\.[^.]*$/, '').slice(0, 60) || 'Photo';
     const size = [probe.naturalWidth, probe.naturalHeight].map(v => Math.min(MAX_SIDE, Math.max(1, Math.round(v / DPI * 1000) / 1000)));
     await open({ format: 2, page: 'custom', size, pages: [blankPage()] }, await uniqueTitle(name), null);
-    const image = await fabric.FabricImage.fromURL(url), [w] = pagePx();
+    const image = await kbe.FabricImage.fromURL(url), [w] = pagePx();
     image.set({ left: 0, top: 0, scaleX: w / image.width, scaleY: w / image.width, kbName: 'Photo ' + name });
     board.add(image); image.setCoords(); commitDesign(); // the page thumbnail and Layers too
     touch.tool = 'remove'; touch.source = null; photoTab = 'retouch';

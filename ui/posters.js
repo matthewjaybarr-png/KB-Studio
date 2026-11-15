@@ -54,7 +54,7 @@ const COLOUR_CARDS = [['red', '#e53935', ['red apple', 'strawberry', 'fire engin
   ['pink', '#ec407a', ['pig', 'flamingo', 'cherry blossom']], ['brown', '#795548', ['teddy bear', 'chocolate bar', 'horse']], ['black', '#212121', ['black cat', 'spider', 'black heart']],
   ['white', '#ffffff', ['snowman without snow', 'cloud', 'ghost']]];
 async function colourCard([name, hex, pics], x, y, w, h) {
-  const r = Math.min(w, h) * 0.26, parts = [new fabric.Circle({ left: x + w / 2 - r, top: y + h * 0.06, radius: r, fill: hex, stroke: '#00000022', strokeWidth: 3, kbName: 'Colour' }),
+  const r = Math.min(w, h) * 0.26, parts = [new kbe.Circle({ left: x + w / 2 - r, top: y + h * 0.06, radius: r, fill: hex, stroke: '#00000022', strokeWidth: 3, kbName: 'Colour' }),
     cardWords(name, x, y + h * 0.06 + r * 2 + h * 0.03, w, h * 0.09, { fill: name === 'white' || name === 'yellow' ? '#555555' : hex, stroke: name === 'white' ? '#999999' : null, strokeWidth: name === 'white' ? 1 : 0 })];
   for (const [j, p] of pics.entries()) parts.push(await pic(p, x + w * (0.22 + j * 0.28), y + h * 0.82, Math.min(w * 0.22, h * 0.2)));
   return parts;
@@ -68,9 +68,9 @@ const SHAPE_CARDS = [
 async function shapeCard([name, about, points], x, y, w, h, i) {
   const edge = CARD_COLOURS[(i + 2) % CARD_COLOURS.length][1], s = Math.min(w * 0.7, h * 0.5), left = x + (w - s) / 2, top = y + h * 0.07, look = { fill: edge, stroke: '#3a3a3a', strokeWidth: Math.max(3, s * 0.015), kbName: 'Shape' };
   const at = ([px, py]) => ({ x: left + px * s, y: top + py * s });
-  const shape = name === 'circle' ? new fabric.Circle({ left, top, radius: s / 2, ...look })
-    : name === 'oval' ? new fabric.Ellipse({ left, top: top + s * 0.18, rx: s / 2, ry: s * 0.32, ...look })
-      : new fabric.Polygon((name === 'heart' ? heartPoints(80) : points).map(at), look);
+  const shape = name === 'circle' ? new kbe.Circle({ left, top, radius: s / 2, ...look })
+    : name === 'oval' ? new kbe.Ellipse({ left, top: top + s * 0.18, rx: s / 2, ry: s * 0.32, ...look })
+      : new kbe.Polygon((name === 'heart' ? heartPoints(80) : points).map(at), look);
   return [shape, cardWords(name, x, y + h * 0.64, w, h * 0.1), cardWords(about, x + w * 0.08, y + h * 0.8, w * 0.84, h * 0.045, { fontWeight: 'normal', fill: '#555555' })];
 }
 // ---- Calendar set: days of the week strips, then months, seasons and weather as cards ----

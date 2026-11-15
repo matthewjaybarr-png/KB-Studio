@@ -19,7 +19,7 @@ async function softBox(page, x, y, w, h, colour, heading, icon) {
 }
 const bigTitle = (text, top = 36, width = 720, left = 48, o = {}) => T(text, left, top, { width, fontSize: 52, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: '#7f63c9', kbName: 'Title', ...o });
 const tickBox = (x, y, size = 22) => R(x, y, size, size, { rx: 4, ry: 4, stroke: '#555555', strokeWidth: 2, kbName: 'Tick box' });
-const fillLine = (x, y, w) => new fabric.Line([x, y, x + w, y], { stroke: '#999999', strokeWidth: 1.5, kbName: 'Write here' });
+const fillLine = (x, y, w) => new kbe.Line([x, y, x + w, y], { stroke: '#999999', strokeWidth: 1.5, kbName: 'Write here' });
 // A grid of boxes with words in some: `cols` widths, `rows` heights, `text(r, c)` the words (or '' for none), `fill(r, c)`.
 // `o.slot(r, c)` marks the cells that take a child's name: an empty text box My lists' Put these names on the page fills.
 function gridBoxes(page, left, top, cols, rows, text, fill = () => 'transparent', o = {}) {
@@ -129,7 +129,7 @@ Object.assign(STARTERS, {
         tickBox(64, top + 392), T('I can help as a chaperone.', 96, top + 390, { width: 400, fontSize: 20, kbName: 'Chaperone' }),
         T('Please return by ____________ to ' + teacherName() + '.', 64, top + 440, { width: 688, fontSize: 18, fill: '#777777', kbName: 'Return to' }));
     }
-    page.add(new fabric.Line([24, 528, 792, 528], { stroke: '#999999', strokeWidth: 2, strokeDashArray: [10, 8], kbName: 'Cut here' }), await pic('scissors', 40, 528, 28));
+    page.add(new kbe.Line([24, 528, 792, 528], { stroke: '#999999', strokeWidth: 2, strokeDashArray: [10, 8], kbName: 'Cut here' }), await pic('scissors', 40, 528, 28));
   },
   'Class rules': async page => {
     page.add(bigTitle('Our Class Rules', 40, 720, 48, { fontSize: 64 }));

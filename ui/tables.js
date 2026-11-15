@@ -31,10 +31,10 @@ function writeTable(t) {
 }
 // A new cell looks like the one it was copied from, with no words.
 function cellLike(t, from, left, top, width, height) {
-  const rect = new fabric.Rect({ left, top, width, height, fill: from.rect.fill, stroke: from.rect.stroke, strokeWidth: from.rect.strokeWidth, strokeDashArray: from.rect.strokeDashArray, opacity: from.rect.opacity, kbName: 'Table cell', kbTable: t.id });
+  const rect = new kbe.Rect({ left, top, width, height, fill: from.rect.fill, stroke: from.rect.stroke, strokeWidth: from.rect.strokeWidth, strokeDashArray: from.rect.strokeDashArray, opacity: from.rect.opacity, kbName: 'Table cell', kbTable: t.id });
   const k = { rect, r: 0, c: 0, rs: 1, cs: 1, dx: from.dx || 6, dy: from.dy || 6, dw: from.text ? from.dw : 12 };
   const style = from.text || t.cells.find(x => x.text)?.text;
-  k.text = new fabric.Textbox('', { left: left + k.dx, top: top + k.dy, width: Math.max(1, width - k.dw), minWidth: 1, fontFamily: style?.fontFamily || 'Lexend', fontSize: (style?.fontSize || 20) * (style?.scaleY || 1),
+  k.text = new kbe.Textbox('', { left: left + k.dx, top: top + k.dy, width: Math.max(1, width - k.dw), minWidth: 1, fontFamily: style?.fontFamily || 'Lexend', fontSize: (style?.fontSize || 20) * (style?.scaleY || 1),
     fontWeight: style?.fontWeight, fontStyle: style?.fontStyle, fill: style?.fill || '#222222', textAlign: style?.textAlign || 'left', lineHeight: style?.lineHeight || 1.16, kbName: 'Cell text', kbTable: t.id });
   return k;
 }

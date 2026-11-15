@@ -60,20 +60,20 @@ function useCells(layout, count) {
 async function usePage(layout, pictures) {
   const objects = [];
   if (layout === 'page') {
-    const [w, h] = [8.5 * PX, 11 * PX], { url, id } = pictures[0], image = await fabric.FabricImage.fromURL(url), k = Math.min(1, (w * 0.8) / image.width, (h * 0.8) / image.height);
+    const [w, h] = [8.5 * PX, 11 * PX], { url, id } = pictures[0], image = await kbe.FabricImage.fromURL(url), k = Math.min(1, (w * 0.8) / image.width, (h * 0.8) / image.height);
     image.set({ scaleX: k, scaleY: k, kbName: 'Photo ' + id });
-    image.setPositionByOrigin(new fabric.Point(w / 2, h / 2), 'center', 'center');
+    image.setPositionByOrigin(new kbe.Point(w / 2, h / 2), 'center', 'center');
     return { objects: [image.toObject(KEEP)], background: '#ffffff' };
   }
   const cells = useCells(layout, layout === 'collage' ? pictures.length : 4);
   for (const [i, [left, top, width, height]] of cells.entries()) {
     const frame = makeFrame(width, height, 'rect', { left, top }), picture = pictures[layout === 'strip' ? i % 4 : i];
     if (!picture) { objects.push(frame.toObject(KEEP)); continue; } // a short last strip keeps empty frames to drop photos in
-    const image = await fabric.FabricImage.fromURL(picture.url);
+    const image = await kbe.FabricImage.fromURL(picture.url);
     image.kbName = 'Photo ' + picture.id;
     objects.push(fitInFrame(image, frame, await faceBox(image)).toObject(KEEP));
   }
-  if (layout === 'strip') for (const s of [0, 1]) objects.push(new fabric.Textbox('Say cheese!', { left: cells[s * 4][0], top: 6 * PX - 64, width: cells[0][2], fontSize: 24, fontFamily: 'Caveat', textAlign: 'center', fill: '#333333', kbName: 'Strip words' }).toObject(KEEP));
+  if (layout === 'strip') for (const s of [0, 1]) objects.push(new kbe.Textbox('Say cheese!', { left: cells[s * 4][0], top: 6 * PX - 64, width: cells[0][2], fontSize: 24, fontFamily: 'Caveat', textAlign: 'center', fill: '#333333', kbName: 'Strip words' }).toObject(KEEP));
   return { objects, background: '#ffffff' };
 }
 

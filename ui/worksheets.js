@@ -145,7 +145,7 @@ function searchPage(title, s, answers) {
   const per = Math.ceil(s.placed.length / 3), cell = Math.min(64, 680 / s.size, (1000 - 170 - 44 - per * 30) / s.size), left = (816 - cell * s.size) / 2, top = 170, mark = new Set();
   if (answers) for (const p of s.placed) for (let i = 0; i < p.word.length; i++) mark.add((p.x + p.dx * i) + ',' + (p.y + p.dy * i));
   const letters = s.grid.flatMap((row, y) => row.map((c, x) => T(c, left + x * cell, top + y * cell + cell * 0.18, { width: cell, fontSize: cell * 0.58, textAlign: 'center', fontWeight: mark.has(x + ',' + y) ? 'bold' : 'normal', fill: mark.has(x + ',' + y) ? SHEET_PINK : '#222222', kbName: 'Letter' })));
-  const grid = new fabric.Group([R(left - 8, top - 8, cell * s.size + 16, cell * s.size + 16, { rx: 12, ry: 12, stroke: '#9b6bd6', strokeWidth: 3, kbName: 'Border' }), ...letters], { kbName: 'Word search grid' });
+  const grid = new kbe.Group([R(left - 8, top - 8, cell * s.size + 16, cell * s.size + 16, { rx: 12, ry: 12, stroke: '#9b6bd6', strokeWidth: 3, kbName: 'Border' }), ...letters], { kbName: 'Word search grid' });
   const words = s.placed.map(p => p.word).sort(), cols = 3, below = top + cell * s.size + 36;
   const lists = Array.from({ length: cols }, (_, c) => words.slice(c * per, (c + 1) * per)).filter(l => l.length)
     .map((l, c) => T(l.join('\n'), 96 + c * 220, below, { width: 200, fontSize: Math.min(24, (1000 - below) / per / 1.3), kbName: 'Words' }));
@@ -159,7 +159,7 @@ function crosswordPage(title, x, answers) {
     if (x.numbers.has(k)) parts.push(T(String(x.numbers.get(k)), l + 2, t + 1, { width: cell * 0.5, fontSize: Math.max(8, cell * 0.28), kbName: 'Number' }));
     if (answers) parts.push(T(c, l, t + cell * 0.22, { width: cell, fontSize: cell * 0.55, textAlign: 'center', fill: SHEET_PINK, fontWeight: 'bold', kbName: 'Letter' }));
   }
-  const grid = new fabric.Group(parts, { kbName: 'Crossword grid' }), below = top + cell * x.h + 32;
+  const grid = new kbe.Group(parts, { kbName: 'Crossword grid' }), below = top + cell * x.h + 32;
   const clue = p => `${p.n}. ${p.clue || '(write a clue)'}${answers ? ' (' + p.word + ')' : ''}`;
   const across = x.placed.filter(p => p.dx).sort((a, b) => a.n - b.n), down = x.placed.filter(p => p.dy).sort((a, b) => a.n - b.n);
   const size = Math.max(14, Math.min(22, (1010 - below) / (Math.max(across.length, down.length) + 1) / 1.35));

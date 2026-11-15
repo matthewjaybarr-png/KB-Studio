@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0
+
+- Create now runs on KB Studio's own drawing engine instead of the Fabric.js library. Saved designs keep the same format, so existing designs open and save as before, and designs saved by this version still open in older ones.
+- KB Studio is now released under the MIT License. The PDF writer, QR code maker and RAW (CR2) reader are now original code, so the project no longer bundles Fabric.js, jsPDF, qrcode-generator or rawler.
+- Crop mode can no longer get stuck if it is started twice, and dragging a crop corner down to nothing no longer breaks the picture.
+- Very large shadows no longer use excessive memory.
+
 ## 0.52.2
 
 - Photos added to arch, heart, oval, star and hexagon frames fill the whole frame again, instead of only its lower-right corner. Designs saved with the old problem are fixed when they open.

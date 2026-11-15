@@ -77,7 +77,7 @@ function fillOf(spPr, theme) {
     if (!stops.length) return undefined;
     const lin = kid(grad, 'lin'), a = (lin ? num(lin, 'ang') / ANGLE : 90) * Math.PI / 180, dx = Math.cos(a) / 2, dy = Math.sin(a) / 2;
     const circle = !!kid(grad, 'path');
-    return { fill: new fabric.Gradient({
+    return { fill: new kbe.Gradient({
       type: circle ? 'radial' : 'linear', gradientUnits: 'percentage',
       coords: circle ? { x1: 0.5, y1: 0.5, r1: 0, x2: 0.5, y2: 0.5, r2: 0.5 } : { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy },
       colorStops: stops.map(s => ({ offset: s.offset, color: s.c.hex, opacity: s.c.alpha }))
@@ -194,7 +194,7 @@ function settle(object, box, cx = box.w / 2, cy = box.h / 2) {
   let dx = cx - box.w / 2, dy = cy - box.h / 2;
   if (box.flipH) dx = -dx;
   if (box.flipV) dy = -dy;
-  const a = box.rot * Math.PI / 180, centre = new fabric.Point(box.x + box.w / 2 + dx * Math.cos(a) - dy * Math.sin(a), box.y + box.h / 2 + dx * Math.sin(a) + dy * Math.cos(a));
+  const a = box.rot * Math.PI / 180, centre = new kbe.Point(box.x + box.w / 2 + dx * Math.cos(a) - dy * Math.sin(a), box.y + box.h / 2 + dx * Math.sin(a) + dy * Math.cos(a));
   object.set({ angle: ((box.rot % 360) + 360) % 360 });
   object.setPositionByOrigin(centre, 'center', 'center');
   return object;
@@ -268,7 +268,7 @@ function textOf(txBody, box, shapeStyle, ctx, cell) {
   const bodyPr = kid(txBody, 'bodyPr'), inset = (name, margin, fallback) => (cell ? num(cell, margin, fallback) : num(bodyPr, name, fallback)) * box.scale;
   const left = inset('lIns', 'marL', 91440), right = inset('rIns', 'marR', 91440), top = inset('tIns', 'marT', 45720), bottom = inset('bIns', 'marB', 45720);
   const { charSpacing = 0, ...font } = base;
-  const text = new fabric.Textbox(lines.join('\n'), { ...font, charSpacing, styles, textAlign: align, lineHeight: Math.round(lineHeight * 1000) / 1000, width: Math.max(8, box.w - left - right), splitByGrapheme: false, kbName: lines.find(l => l.trim()).trim().slice(0, 40) });
+  const text = new kbe.Textbox(lines.join('\n'), { ...font, charSpacing, styles, textAlign: align, lineHeight: Math.round(lineHeight * 1000) / 1000, width: Math.max(8, box.w - left - right), splitByGrapheme: false, kbName: lines.find(l => l.trim()).trim().slice(0, 40) });
   const anchor = (cell || bodyPr)?.getAttribute('anchor'), room = box.h - top - bottom;
   const cy = (anchor === 'ctr' ? top + room / 2 : anchor === 'b' ? box.h - bottom - text.height / 2 : top + text.height / 2) + baselineShift(text);
   return settle(text, box, left + text.width / 2, cy);
@@ -289,7 +289,7 @@ function baselineShift(text) {
 async function pictureOf(blipFill, spPr, box, ctx) {
   const blip = kid(blipFill, 'blip'), src = await ctx.picture(ctx.rels.get(relId(blip, 'embed')));
   if (!src) return null;
-  const image = await fabric.FabricImage.fromURL(src);
+  const image = await kbe.FabricImage.fromURL(src);
   const nw = image.width, nh = image.height, sr = kid(blipFill, 'srcRect'), fr = kid(blipFill, 'stretch', 'fillRect');
   // The part of the picture used (srcRect), stretched over the box inset by fillRect; negative insets overflow the box.
   const crop = { l: num(sr, 'l') / 1e5, t: num(sr, 't') / 1e5, r: num(sr, 'r') / 1e5, b: num(sr, 'b') / 1e5 };
@@ -308,8 +308,8 @@ async function pictureOf(blipFill, spPr, box, ctx) {
     const d = shape.d.replace(/(-?[\d.]+) (-?[\d.]+)/g, (m, x, y) => `${r2((x - cx) / scaleX)} ${r2((y - cy) / scaleY)}`);
     // Arc radii are pairs too and were moved; arcs only occur in ellipses, which are rebuilt in picture units instead.
     const clip = /A/.test(shape.d) && kid(spPr, 'prstGeom')?.getAttribute('prst') === 'ellipse'
-      ? new fabric.Ellipse({ rx: box.w / 2 / scaleX, ry: box.h / 2 / scaleY, originX: 'center', originY: 'center', left: (box.w / 2 - cx) / scaleX, top: (box.h / 2 - cy) / scaleY })
-      : /A/.test(shape.d) ? null : new fabric.Path(d, { originX: 'center', originY: 'center' });
+      ? new kbe.Ellipse({ rx: box.w / 2 / scaleX, ry: box.h / 2 / scaleY, originX: 'center', originY: 'center', left: (box.w / 2 - cx) / scaleX, top: (box.h / 2 - cy) / scaleY })
+      : /A/.test(shape.d) ? null : new kbe.Path(d, { originX: 'center', originY: 'center' });
     if (clip && clip.type === 'path') clip.set({ left: clip.pathOffset.x, top: clip.pathOffset.y });
     if (clip) image.clipPath = clip;
   }
@@ -326,18 +326,18 @@ function shapeOf(spPr, box, ctx, styleEl) {
   if (shape.line) {
     if (!line) return null;
     const [x1, y1, x2, y2] = [box.flipH ? box.w : 0, box.flipV ? box.h : 0, box.flipH ? 0 : box.w, box.flipV ? 0 : box.h];
-    const l = new fabric.Line([x1, y1, x2, y2], { ...line, strokeLineCap: 'round', kbName: 'Line' });
+    const l = new kbe.Line([x1, y1, x2, y2], { ...line, strokeLineCap: 'round', kbName: 'Line' });
     return settle(l, { ...box, flipH: false, flipV: false });
   }
   if (!fill.fill && !line) return null;
   const look = { fill: fill.fill, opacity: fill.alpha ?? 1, ...(line || { strokeWidth: 0, stroke: null }) };
   const kind = kid(spPr, 'prstGeom')?.getAttribute('prst');
   let object;
-  if (!shape.d) object = new fabric.Rect({ width: box.w, height: box.h, ...look, kbName: 'Rectangle' });
-  else if (kind === 'roundRect') { const r = Math.min(box.w, box.h) * adj(kid(spPr, 'prstGeom'), 'adj', 16667) / 100000; object = new fabric.Rect({ width: box.w, height: box.h, rx: r, ry: r, ...look, kbName: 'Rounded rectangle' }); }
-  else if (kind === 'ellipse') object = new fabric.Ellipse({ rx: box.w / 2, ry: box.h / 2, ...look, kbName: 'Circle' });
+  if (!shape.d) object = new kbe.Rect({ width: box.w, height: box.h, ...look, kbName: 'Rectangle' });
+  else if (kind === 'roundRect') { const r = Math.min(box.w, box.h) * adj(kid(spPr, 'prstGeom'), 'adj', 16667) / 100000; object = new kbe.Rect({ width: box.w, height: box.h, rx: r, ry: r, ...look, kbName: 'Rounded rectangle' }); }
+  else if (kind === 'ellipse') object = new kbe.Ellipse({ rx: box.w / 2, ry: box.h / 2, ...look, kbName: 'Circle' });
   else {
-    object = new fabric.Path(shape.d, { ...look, kbName: 'Shape' });
+    object = new kbe.Path(shape.d, { ...look, kbName: 'Shape' });
     if (shape.open) object.fill = null;
     object.set({ flipX: box.flipH, flipY: box.flipV });
     return settle(object, box, object.pathOffset.x, object.pathOffset.y);
@@ -358,7 +358,7 @@ function tableOf(tbl, box, ctx) {
     // Fabric draws one border all round, so the cell takes the first edge that has one.
     const edge = ['lnT', 'lnL', 'lnB', 'lnR'].map(name => kid(tcPr, name)).find(ln => ln && !kid(ln, 'noFill') && kid(ln, 'solidFill'));
     const fill = fillOf(tcPr, ctx.theme), line = strokeOf(edge, ctx.theme, box.scale);
-    objects.push(new fabric.Rect({ left: cell.x, top: cell.y, width: cell.w, height: cell.h, fill: fill?.fill ?? null, opacity: fill?.alpha ?? 1, ...(line || { stroke: null, strokeWidth: 0 }), kbName: 'Table cell', kbTable }));
+    objects.push(new kbe.Rect({ left: cell.x, top: cell.y, width: cell.w, height: cell.h, fill: fill?.fill ?? null, opacity: fill?.alpha ?? 1, ...(line || { stroke: null, strokeWidth: 0 }), kbName: 'Table cell', kbTable }));
     const txBody = kid(tc, 'txBody'), text = txBody && textOf(txBody, cell, null, ctx, tcPr);
     if (text) objects.push(text.set({ kbName: 'Cell text', kbTable }));
   }));
@@ -481,7 +481,7 @@ async function designFromPowerPoint(pkg) {
       break;
     }
     await slideObjects(kid(root, 'cSld', 'spTree'), { ...ctx, rels: slideRels }, { k: ctx.k, groups: [] }, out);
-    pages.push({ version: fabric.version, objects: out.objects.map(o => o.toObject(KEEP)), background });
+    pages.push({ version: kbe.version, objects: out.objects.map(o => o.toObject(KEEP)), background });
   }
   if (slides.length > MAX_PAGES) skipped.push(`${slides.length - MAX_PAGES} pages past the first ${MAX_PAGES}`);
   return { doc: { format: 2, page: fit.page, size: fit.page === 'custom' ? fit.size : undefined, tile: 'single', copies: 1, fonts: added, pages }, swaps: ctx.swaps, skipped, fonts: families };
@@ -489,11 +489,11 @@ async function designFromPowerPoint(pkg) {
 
 // A PNG or JPEG download: one locked picture filling a page of the same shape.
 async function designFromPicture(file) {
-  const src = await shrink(file), image = await fabric.FabricImage.fromURL(src), ratio = image.height / image.width;
+  const src = await shrink(file), image = await kbe.FabricImage.fromURL(src), ratio = image.height / image.width;
   const key = Object.keys(PAGES).find(k => Math.abs(PAGES[k][1] / PAGES[k][0] - ratio) < 0.005);
   const size = key ? PAGES[key] : ratio >= 1 ? [8.5, Math.min(MAX_SIDE, 8.5 * ratio)] : [Math.min(MAX_SIDE, 11 / ratio), 11];
   image.set({ left: 0, top: 0, scaleX: size[0] * PX / image.width, scaleY: size[1] * PX / image.height, kbName: 'Canva design', kbLocked: true });
-  return { doc: { format: 2, page: key || 'custom', size: key ? undefined : size.map(v => Math.round(v * 1000) / 1000), tile: 'single', copies: 1, pages: [{ version: fabric.version, objects: [image.toObject(KEEP)], background: '#ffffff' }] }, swaps: new Map(), skipped: [], picture: true };
+  return { doc: { format: 2, page: key || 'custom', size: key ? undefined : size.map(v => Math.round(v * 1000) / 1000), tile: 'single', copies: 1, pages: [{ version: kbe.version, objects: [image.toObject(KEEP)], background: '#ffffff' }] }, swaps: new Map(), skipped: [], picture: true };
 }
 
 // What came across and what didn't, shown once over the new design.

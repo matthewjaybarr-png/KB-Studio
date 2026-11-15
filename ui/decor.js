@@ -118,9 +118,9 @@ const decorUrl = svg => 'data:image/svg+xml,' + encodeURIComponent(svg);
 async function addDecor(id, at) {
   const found = DECOR.find(d => d[0] === id);
   if (!found || !board) return null;
-  const { objects, options } = await fabric.loadSVGFromString(found[3]);
+  const { objects, options } = await kbe.loadSVGFromString(found[3]);
   // Always a group, even for a single shape, so every decoration offers its colours the same way.
-  const parts = objects.filter(Boolean), art = parts.length > 1 ? fabric.util.groupSVGElements(parts, options) : new fabric.Group(parts);
+  const parts = objects.filter(Boolean), art = parts.length > 1 ? kbe.util.groupSVGElements(parts, options) : new kbe.Group(parts);
   art.scale(200 / Math.max(art.getScaledWidth(), art.getScaledHeight()));
   art.set({ kbName: found[1] });
   place(art, at);

@@ -28,12 +28,12 @@ async function checkTile(item, x, y, w, h) {
   }
   if (item.shape) {
     const [name, , points] = item.shape, s = Math.min(w * 0.55, room * 0.75), left = x + (w - s) / 2, look = { fill: '#d9cff5', stroke: '#3a3a3a', strokeWidth: 1.5, kbName: 'Shape ' + name };
-    parts.push(name === 'circle' ? new fabric.Circle({ left, top, radius: s / 2, ...look }) : name === 'oval' ? new fabric.Ellipse({ left, top: top + s * 0.18, rx: s / 2, ry: s * 0.32, ...look })
-      : new fabric.Polygon((name === 'heart' ? heartPoints(40) : points).map(([px, py]) => ({ x: left + px * s, y: top + py * s })), look));
+    parts.push(name === 'circle' ? new kbe.Circle({ left, top, radius: s / 2, ...look }) : name === 'oval' ? new kbe.Ellipse({ left, top: top + s * 0.18, rx: s / 2, ry: s * 0.32, ...look })
+      : new kbe.Polygon((name === 'heart' ? heartPoints(40) : points).map(([px, py]) => ({ x: left + px * s, y: top + py * s })), look));
   }
   if (item.colour) {
     const [name, hex] = item.colour, r = Math.min(w, room) * 0.3;
-    parts.push(new fabric.Circle({ left: x + w / 2 - r, top, radius: r, fill: hex, stroke: '#00000033', strokeWidth: 1.5, kbName: 'Colour ' + name }), T(name, x, top + r * 2 + 1, { width: w, fontSize: 11, textAlign: 'center', kbName: 'Colour name' }));
+    parts.push(new kbe.Circle({ left: x + w / 2 - r, top, radius: r, fill: hex, stroke: '#00000033', strokeWidth: 1.5, kbName: 'Colour ' + name }), T(name, x, top + r * 2 + 1, { width: w, fontSize: 11, textAlign: 'center', kbName: 'Colour name' }));
   }
   parts.push(...tickRow(x, y + h - 36, w));
   return parts;

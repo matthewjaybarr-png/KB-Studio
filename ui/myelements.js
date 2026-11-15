@@ -32,9 +32,9 @@ async function saveMine(place = $('#mine-place').value) {
   const w = Math.max(...boxes.map(b => b.left + b.width)) - left, h = Math.max(...boxes.map(b => b.top + b.height)) - top;
   const json = objects.map(o => { const j = o.toObject(KEEP); j.left -= left; j.top -= top; return j; });
   selectObjects(objects);
-  const sc = new fabric.StaticCanvas(document.createElement('canvas'), { width: Math.ceil(w), height: Math.ceil(h) });
+  const sc = new kbe.StaticCanvas(document.createElement('canvas'), { width: Math.ceil(w), height: Math.ceil(h) });
   let thumb = '';
-  try { await sc.loadFromJSON({ version: fabric.version, objects: json }); sc.renderAll(); thumb = sc.toDataURL({ format: 'png', multiplier: Math.min(1, 160 / Math.max(w, h, 1)) }); } finally { sc.dispose(); }
+  try { await sc.loadFromJSON({ version: kbe.version, objects: json }); sc.renderAll(); thumb = sc.toDataURL({ format: 'png', multiplier: Math.min(1, 160 / Math.max(w, h, 1)) }); } finally { sc.dispose(); }
   const name = freeName(objects.length === 1 ? objects[0].kbName || 'My element' : 'My element');
   const el = { format: 1, w, h, objects: json, thumb, place: MINE_PLACES[place] ? place : 'mine' };
   await writeMine(name, el);
@@ -50,10 +50,10 @@ async function saveMine(place = $('#mine-place').value) {
 async function addMine(name, at) {
   const el = myElements.get(name);
   if (!el || !board) return null;
-  const ids = new Map(), objects = await fabric.util.enlivenObjects(el.objects);
+  const ids = new Map(), objects = await kbe.util.enlivenObjects(el.objects);
   for (const o of objects) if (o.kbTable) { if (!ids.has(o.kbTable)) ids.set(o.kbTable, typeof newTableId === 'function' ? newTableId() : o.kbTable); o.kbTable = ids.get(o.kbTable); }
   if (objects.length === 1) return place(objects[0], at);
-  place(new fabric.Group(objects, { kbName: name }), at);
+  place(new kbe.Group(objects, { kbName: name }), at);
   groupSelected(true);
   return board.getActiveObject();
 }

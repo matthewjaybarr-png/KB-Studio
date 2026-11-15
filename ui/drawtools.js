@@ -54,7 +54,7 @@ function setDrawBrush() {
   if (!board) return;
   const look = DRAW_LOOKS[drawing.tool] || DRAW_LOOKS.pen, brush = board.freeDrawingBrush;
   brush.color = look.glow ? mixWhite(drawing.colour, 0.6) : drawing.colour; brush.width = Math.max(1, drawing.width * look.k); brush.strokeLineCap = look.cap; brush.strokeLineJoin = 'round';
-  brush.shadow = look.glow ? new fabric.Shadow({ color: drawing.colour, blur: Math.max(14, drawing.width * 6), offsetX: 0, offsetY: 0 }) : null;
+  brush.shadow = look.glow ? new kbe.Shadow({ color: drawing.colour, blur: Math.max(14, drawing.width * 6), offsetX: 0, offsetY: 0 }) : null;
 }
 // The glow pen's bright middle: its colour most of the way to white.
 function mixWhite(colour, k) {
@@ -92,7 +92,7 @@ function eraseAt(at) {
 // traced as points a few pixels apart, the points under the eraser go, and what's left becomes separate lines, each
 // placed exactly where it was. A line it doesn't touch is left as it is.
 function rubOut(o, at, r) {
-  const m = o.calcTransformMatrix(), local = fabric.util.transformPoint(at, fabric.util.invertTransform(m)).add(o.pathOffset);
+  const m = o.calcTransformMatrix(), local = kbe.util.transformPoint(at, kbe.util.invertTransform(m)).add(o.pathOffset);
   const reach = r / Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) + o.strokeWidth / 2, step = Math.max(0.5, Math.min(4, reach / 3));
   const under = p => Math.hypot(p.x - local.x, p.y - local.y) < reach;
   // Each piece of the line as points: straight, quadratic and cubic curves sampled every `step`.
@@ -123,12 +123,12 @@ function rubOut(o, at, r) {
     }
   }
   const at0 = board.getObjects().indexOf(o), pieces = runs.filter(run => run.length > 1).map(run => {
-    const piece = new fabric.Path(run.map((p, i) => [i ? 'L' : 'M', p.x, p.y]), {
+    const piece = new kbe.Path(run.map((p, i) => [i ? 'L' : 'M', p.x, p.y]), {
       stroke: o.stroke, strokeWidth: o.strokeWidth, strokeLineCap: o.strokeLineCap, strokeLineJoin: o.strokeLineJoin, fill: o.fill,
-      opacity: o.opacity, globalCompositeOperation: o.globalCompositeOperation, shadow: o.shadow ? new fabric.Shadow(o.shadow.toObject()) : null,
+      opacity: o.opacity, globalCompositeOperation: o.globalCompositeOperation, shadow: o.shadow ? new kbe.Shadow(o.shadow.toObject()) : null,
       angle: o.angle, scaleX: o.scaleX, scaleY: o.scaleY, skewX: o.skewX, skewY: o.skewY, flipX: o.flipX, flipY: o.flipY, kbName: o.kbName
     });
-    piece.setPositionByOrigin(fabric.util.transformPoint(piece.pathOffset.subtract(o.pathOffset), m), 'center', 'center');
+    piece.setPositionByOrigin(kbe.util.transformPoint(piece.pathOffset.subtract(o.pathOffset), m), 'center', 'center');
     piece.setCoords();
     return piece;
   });

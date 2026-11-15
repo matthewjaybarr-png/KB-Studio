@@ -109,13 +109,13 @@ const TRACE_GREY = '#8c8c8c', MODEL_INK = '#3a3a3a';
 function traceText(text, left, top, k, dotted, o = {}) {
   const d = letterPath(text, left, top, k);
   if (!d) return null;
-  const path = new fabric.Path(d, { fill: '', stroke: dotted ? TRACE_GREY : MODEL_INK, strokeWidth: Math.max(2.5, 7 * k), strokeLineCap: 'round', strokeLineJoin: 'round',
+  const path = new kbe.Path(d, { fill: '', stroke: dotted ? TRACE_GREY : MODEL_INK, strokeWidth: Math.max(2.5, 7 * k), strokeLineCap: 'round', strokeLineJoin: 'round',
     strokeDashArray: dotted ? [0.1, Math.max(7, 15 * k)] : null, kbName: dotted ? 'Letters to trace' : 'Letters', ...o });
   return path;
 }
 // Three writing lines, as on school paper: a solid top line, a dashed middle line and a solid base line.
 function writingLines(left, top, width, k) {
-  const line = (y, o) => new fabric.Line([left, y, left + width, y], { stroke: '#8fb3e8', strokeWidth: 2, kbName: 'Writing line', ...o });
+  const line = (y, o) => new kbe.Line([left, y, left + width, y], { stroke: '#8fb3e8', strokeWidth: 2, kbName: 'Writing line', ...o });
   return [line(top), line(top + 50 * k, { stroke: '#f2a0c4', strokeDashArray: [10, 8] }), line(top + 100 * k)];
 }
 
@@ -145,7 +145,7 @@ async function shadowUrl(name) {
 // A picture `size` pixels square, centred on (cx, cy); `o.shadow` draws it as its shadow.
 async function pic(name, cx, cy, size, o = {}) {
   const { shadow: asShadow, ...rest } = o;
-  const image = await fabric.FabricImage.fromURL(await (asShadow ? shadowUrl(name) : picUrl(name)));
+  const image = await kbe.FabricImage.fromURL(await (asShadow ? shadowUrl(name) : picUrl(name)));
   o = rest;
   image.set({ left: cx - size / 2, top: cy - size / 2, scaleX: size / image.width, scaleY: size / image.height, kbName: picLabel(name), ...o });
   return image;
@@ -267,7 +267,7 @@ function strokePoints(kind, x0, x1, y, amp) {
   return pts;
 }
 const pointsPath = pts => 'M' + pts.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L');
-const dotted = (d, o = {}) => new fabric.Path(d, { fill: '', stroke: TRACE_GREY, strokeWidth: 6, strokeLineCap: 'round', strokeLineJoin: 'round', strokeDashArray: [0.1, 15], kbName: 'Line to trace', ...o });
+const dotted = (d, o = {}) => new kbe.Path(d, { fill: '', stroke: TRACE_GREY, strokeWidth: 6, strokeLineCap: 'round', strokeLineJoin: 'round', strokeDashArray: [0.1, 15], kbName: 'Line to trace', ...o });
 async function linesPages(title, rand) {
   const pairs = shuffled(Object.values(MAZE_PAIRS), rand), rows = LINE_STROKES.length, pitch = 830 / rows, parts = [...preHeader(title)];
   for (const [i, [kind]] of LINE_STROKES.entries()) {
@@ -281,7 +281,7 @@ async function linesPages(title, rand) {
     const box = (x, y) => kind === 'circle' ? SHAPE_PATHS.ellipse(w, h) : kind === 'square' || kind === 'rectangle' ? pathPoly([[0, 0], [w, 0], [w, h], [0, h]])
       : kind === 'triangle' ? pathPoly([[w / 2, 0], [w, h], [0, h]]) : SHAPE_PATHS[kind === 'oval' ? 'ellipse' : kind](w, h);
     const shape = dotted(box(), { kbName: label + ' to trace' });
-    shape.setPositionByOrigin(new fabric.Point(cx, cy), 'center', 'center');
+    shape.setPositionByOrigin(new kbe.Point(cx, cy), 'center', 'center');
     page2.push(shape, T(label, cx - 100, cy + h / 2 + 10, { width: 200, fontSize: 24, textAlign: 'center', fontFamily: 'Fredoka', kbName: 'Shape name' }));
   }
   return [toPage(parts), toPage(page2)];
@@ -307,7 +307,7 @@ async function countPage(title, rows, style, answers) {
     if (style === 'circle') row.choices.forEach((v, j) => {
       const cx = 652 + j * 48;
       parts.push(T(String(v), cx - 20, top + h / 2 - 22, { width: 40, fontSize: 36, textAlign: 'center', fontFamily: 'Fredoka', kbName: 'Number' }));
-      if (answers && v === row.n) parts.push(new fabric.Circle({ left: cx - 23, top: top + h / 2 - 27, radius: 23, fill: '', stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
+      if (answers && v === row.n) parts.push(new kbe.Circle({ left: cx - 23, top: top + h / 2 - 27, radius: 23, fill: '', stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
     });
     else {
       parts.push(R(650, top + h / 2 - 45, 100, 90, { rx: 12, ry: 12, stroke: '#555555', strokeWidth: 2.5, kbName: 'Write the number' }));
@@ -331,14 +331,14 @@ const DOT_SPOTS = n => Array.from({ length: n }, (_, i) => { const perRow = n > 
 async function matchItem(kind, value, cx, cy, side) {
   if (kind === 'pictures' || kind === 'shadows') return [await pic(value, cx, cy, 90, { shadow: kind === 'shadows' && side === 'right', kbName: kind === 'shadows' && side === 'right' ? 'Shadow' : picLabel(value) })];
   if (kind === 'letters' || side === 'left') { const k = 0.7, w = glyphsWidth(String(value)) * k; return [traceText(String(value), cx - w / 2, cy - (/[a-z]/.test(value) ? 75 : 50) * k, k, false, { kbName: 'Letter' })]; }
-  return DOT_SPOTS(value).map(([x, y]) => new fabric.Circle({ left: cx + x - 11, top: cy + y - 11, radius: 11, fill: '#7f63c9', strokeWidth: 0, kbName: 'Dot' }));
+  return DOT_SPOTS(value).map(([x, y]) => new kbe.Circle({ left: cx + x - 11, top: cy + y - 11, radius: 11, fill: '#7f63c9', strokeWidth: 0, kbName: 'Dot' }));
 }
 async function matchPage(title, m, answers) {
   const parts = [...preHeader(answers ? keyTitle(title) : title)], pitch = 820 / m.left.length, y = i => 180 + pitch * (i + 0.5);
-  const dot = (x, i) => new fabric.Circle({ left: x - 9, top: y(i) - 9, radius: 9, fill: '#333333', strokeWidth: 0, kbName: 'Line dot' });
+  const dot = (x, i) => new kbe.Circle({ left: x - 9, top: y(i) - 9, radius: 9, fill: '#333333', strokeWidth: 0, kbName: 'Line dot' });
   for (const [i, item] of m.left.entries()) parts.push(...await matchItem(m.kind, item.a, 140, y(i), 'left'), dot(270, i));
   for (const [i, j] of m.order.entries()) parts.push(...await matchItem(m.kind, m.left[j].b, 676, y(i), 'right'), dot(546, i));
-  if (answers) for (const [i, j] of m.order.entries()) parts.push(new fabric.Line([270, y(j), 546, y(i)], { stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
+  if (answers) for (const [i, j] of m.order.entries()) parts.push(new kbe.Line([270, y(j), 546, y(i)], { stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
   return toPage(parts);
 }
 // ---- What comes next: a pattern of pictures with the last two left to draw ----
@@ -387,11 +387,11 @@ async function mazePage(title, m, pair, answers) {
     if (m.walls[c].r) segs.push(`M${x + cell} ${y} L${x + cell} ${y + cell}`);
     if (m.walls[c].b && c !== s * s - 1) segs.push(`M${x} ${y + cell} L${x + cell} ${y + cell}`); // the bottom-right cell is the way out
   }
-  parts.push(new fabric.Path(segs.join(' '), { fill: '', stroke: '#7f63c9', strokeWidth: Math.max(5, cell * 0.12), strokeLineCap: 'round', strokeLineJoin: 'round', kbName: 'Maze walls' }));
+  parts.push(new kbe.Path(segs.join(' '), { fill: '', stroke: '#7f63c9', strokeWidth: Math.max(5, cell * 0.12), strokeLineCap: 'round', strokeLineJoin: 'round', kbName: 'Maze walls' }));
   parts.push(await pic(MAZE_PAIRS[pair][0], left + cell / 2, top - 44, 76), await pic(MAZE_PAIRS[pair][1], left + 640 - cell / 2, top + 640 + 44, 76));
   if (answers) {
     const centre = c => [left + (c % s + 0.5) * cell, top + (Math.floor(c / s) + 0.5) * cell];
-    parts.push(new fabric.Path(pointsPath([[left + cell / 2, top - 4], ...m.path.map(centre), [left + 640 - cell / 2, top + 644]]), { fill: '', stroke: SHEET_PINK, strokeWidth: Math.max(4, cell * 0.22), strokeLineCap: 'round', strokeLineJoin: 'round', opacity: 0.75, kbName: 'Answer' }));
+    parts.push(new kbe.Path(pointsPath([[left + cell / 2, top - 4], ...m.path.map(centre), [left + 640 - cell / 2, top + 644]]), { fill: '', stroke: SHEET_PINK, strokeWidth: Math.max(4, cell * 0.22), strokeLineCap: 'round', strokeLineJoin: 'round', opacity: 0.75, kbName: 'Answer' }));
   }
   return toPage(parts);
 }
@@ -415,7 +415,7 @@ async function soundPage(title, rows, answers) {
     row.choices.forEach((c, j) => {
       const cx = 360 + j * 150;
       parts.push(T(c + c.toLowerCase(), cx - 60, cy - 32, { width: 120, fontSize: 52, textAlign: 'center', fontFamily: 'Fredoka', kbName: 'Letter choice' }));
-      if (answers && c === row.letter) parts.push(new fabric.Ellipse({ left: cx - 62, top: cy - 44, rx: 62, ry: 44, fill: '', stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
+      if (answers && c === row.letter) parts.push(new kbe.Ellipse({ left: cx - 62, top: cy - 44, rx: 62, ry: 44, fill: '', stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
     });
   }
   return toPage(parts);
@@ -438,7 +438,7 @@ async function findPage(title, letter, cells, answers) {
   parts.push(T(`Dot or colour every ${letter} and ${letter.toLowerCase()}.`, 48, 150, { width: 720, fontSize: 24, textAlign: 'center', fontFamily: 'Fredoka', kbName: 'Instructions' }));
   for (const [i, cell] of cells.entries()) {
     const x = left + (i % cols) * size, y = top + Math.floor(i / cols) * size;
-    parts.push(new fabric.Circle({ left: x + 6, top: y + 6, radius: size / 2 - 6, fill: answers && cell.hit ? '#f6c8e0' : '', stroke: answers && cell.hit ? SHEET_PINK : '#9a86d6', strokeWidth: 2.5, kbName: answers && cell.hit ? 'Answer' : 'Bubble' }));
+    parts.push(new kbe.Circle({ left: x + 6, top: y + 6, radius: size / 2 - 6, fill: answers && cell.hit ? '#f6c8e0' : '', stroke: answers && cell.hit ? SHEET_PINK : '#9a86d6', strokeWidth: 2.5, kbName: answers && cell.hit ? 'Answer' : 'Bubble' }));
     parts.push(T(cell.c, x, y + size / 2 - 30, { width: size, fontSize: 48, textAlign: 'center', fontFamily: 'Fredoka', kbName: 'Letter' }));
   }
   return toPage(parts);
@@ -454,7 +454,7 @@ async function tenFramePage(title, rows, answers) {
       for (let c = 0; c < 10; c++) {
         const x = fx + (c % 5) * cell, y = fy + Math.floor(c / 5) * cell;
         parts.push(R(x, y, cell, cell, { stroke: '#555555', strokeWidth: 2, kbName: 'Ten frame box' }));
-        if (f * 10 + c < row.n) parts.push(new fabric.Circle({ left: x + cell * 0.15, top: y + cell * 0.15, radius: cell * 0.35, fill: f ? '#e7779f' : '#7f63c9', strokeWidth: 0, kbName: 'Dot' }));
+        if (f * 10 + c < row.n) parts.push(new kbe.Circle({ left: x + cell * 0.15, top: y + cell * 0.15, radius: cell * 0.35, fill: f ? '#e7779f' : '#7f63c9', strokeWidth: 0, kbName: 'Dot' }));
       }
     }
     parts.push(R(650, top + h / 2 - 45, 100, 90, { rx: 12, ry: 12, stroke: '#555555', strokeWidth: 2.5, kbName: 'Write the number' }));
@@ -511,10 +511,10 @@ async function dotsPage(title, shape, n, answers) {
   parts.push(T('Join the dots from 1 to ' + n + '. What is it?', 48, 150, { width: 720, fontSize: 24, textAlign: 'center', fontFamily: 'Fredoka', kbName: 'Instructions' }));
   const pts = dotPoints(shape, n).map(([x, y]) => [box.left + x * box.size, box.top + y * box.size]);
   const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-  if (answers) parts.push(new fabric.Path(pointsPath([...pts, pts[0]]), { fill: '', stroke: SHEET_PINK, strokeWidth: 4, strokeLineJoin: 'round', kbName: 'Answer' }));
+  if (answers) parts.push(new kbe.Path(pointsPath([...pts, pts[0]]), { fill: '', stroke: SHEET_PINK, strokeWidth: 4, strokeLineJoin: 'round', kbName: 'Answer' }));
   for (const [i, [x, y]] of pts.entries()) {
     const d = Math.hypot(x - cx, y - cy) || 1, ox = (x - cx) / d * 26, oy = (y - cy) / d * 26;
-    parts.push(new fabric.Circle({ left: x - 7, top: y - 7, radius: 7, fill: i === 0 ? '#2e9d5b' : '#333333', strokeWidth: 0, kbName: 'Dot' }));
+    parts.push(new kbe.Circle({ left: x - 7, top: y - 7, radius: 7, fill: i === 0 ? '#2e9d5b' : '#333333', strokeWidth: 0, kbName: 'Dot' }));
     parts.push(T(String(i + 1), x + ox - 20, y + oy - 14, { width: 40, fontSize: 22, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', kbName: 'Dot number' }));
   }
   if (answers) parts.push(await pic(DOT_SHAPES[shape].pic, 408, 880, 90), T('It is ' + DOT_SHAPES[shape].label + '!', 48, 935, { width: 720, fontSize: 26, textAlign: 'center', fontFamily: 'Fredoka', fill: SHEET_PINK, kbName: 'Answer' }));
@@ -522,7 +522,7 @@ async function dotsPage(title, shape, n, answers) {
 }
 
 // ---- Cutting practice: thick dashed lines from the page edge, with scissors where to start; then a spiral ----
-const cutLine = (d, o = {}) => new fabric.Path(d, { fill: '', stroke: '#333333', strokeWidth: 5, strokeDashArray: [18, 11], strokeLineCap: 'butt', strokeLineJoin: 'round', kbName: 'Line to cut', ...o });
+const cutLine = (d, o = {}) => new kbe.Path(d, { fill: '', stroke: '#333333', strokeWidth: 5, strokeDashArray: [18, 11], strokeLineCap: 'butt', strokeLineJoin: 'round', kbName: 'Line to cut', ...o });
 async function cuttingPages(title) {
   const kinds = ['Straight', 'Zigzag', 'Waves', 'Hills', 'Steps'], pitch = 840 / kinds.length, one = [...preHeader(title)];
   one.push(T('Cut along the dashed lines, from the scissors to the end.', 48, 150, { width: 720, fontSize: 20, textAlign: 'center', fill: '#666666', kbName: 'Instructions' }));
@@ -554,7 +554,7 @@ async function oddPage(title, rows, answers) {
     for (const [j, p] of row.pics.entries()) {
       const cx = 138 + j * 180;
       parts.push(await pic(p, cx, cy, Math.min(90, h - 20)));
-      if (answers && j === row.at) parts.push(new fabric.Circle({ left: cx - 56, top: cy - 56, radius: 56, fill: '', stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
+      if (answers && j === row.at) parts.push(new kbe.Circle({ left: cx - 56, top: cy - 56, radius: 56, fill: '', stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
     }
   }
   return toPage(parts);
@@ -572,7 +572,7 @@ async function sizePage(title, rows, answers) {
     for (const [j, s] of row.sizes.entries()) {
       const cx = 220 + j * 190, size = s * Math.min(1, (h - 30) / 100);
       parts.push(await pic(row.pic, cx, cy, size));
-      if (answers && s === want) parts.push(new fabric.Circle({ left: cx - size / 2 - 12, top: cy - size / 2 - 12, radius: size / 2 + 12, fill: '', stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
+      if (answers && s === want) parts.push(new kbe.Circle({ left: cx - size / 2 - 12, top: cy - size / 2 - 12, radius: size / 2 + 12, fill: '', stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
     }
   }
   return toPage(parts);
@@ -599,7 +599,7 @@ async function sortPage(title, kind, picks, answers) {
     if (answers) for (const [i, it] of picks.filter(it => it.group === name).entries()) parts.push(await pic(it.p, left + 90 + (i % 2) * 160, 340 + Math.floor(i / 2) * 150, 100, { kbName: 'Answer' }));
   }
   if (!answers) {
-    parts.push(new fabric.Line([24, 778, 792, 778], { stroke: '#999999', strokeWidth: 2, strokeDashArray: [10, 8], kbName: 'Cut here' }), await pic('scissors', 40, 778, 30));
+    parts.push(new kbe.Line([24, 778, 792, 778], { stroke: '#999999', strokeWidth: 2, strokeDashArray: [10, 8], kbName: 'Cut here' }), await pic('scissors', 40, 778, 30));
     for (const [i, it] of picks.entries()) {
       const x = 58 + (i % 4) * 180, y = 800 + Math.floor(i / 4) * 112;
       parts.push(R(x, y, 160, 104, { stroke: '#555555', strokeWidth: 2, strokeDashArray: [8, 6], kbName: 'Picture to cut out' }), await pic(it.p, x + 80, y + 52, 84));
