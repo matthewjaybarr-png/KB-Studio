@@ -15,6 +15,7 @@ mod faces;
 mod photocraft;
 mod photocraft_faces;
 mod photocraft_redeye;
+mod fill;
 mod photocraft_remove;
 mod photocraft_scancrop;
 mod photocraft_seam;
@@ -226,6 +227,15 @@ async fn pick_shoot(app: tauri::AppHandle, title: Option<String>) -> Option<Stri
         .into_path()
         .ok()
         .map(|p| p.display().to_string())
+}
+
+/// Testing the real window: KB_STUDIO_TEST=<script.js> runs that script in the page a few seconds after
+/// start, and KB_STUDIO_TEST_OUT=<folder> lets it write result files there with `test_out`.
+#[tauri::command]
+fn test_out(name: String, text: String) -> Result<(), String> {
+    let dir = std::env::var("KB_STUDIO_TEST_OUT").map_err(|_| "not testing".to_string())?;
+    let name = Path::new(&name).file_name().ok_or("bad name")?;
+    fs::write(Path::new(&dir).join(name), text).map_err(|e| e.to_string())
 }
 
 /// Development and testing: KB_STUDIO_OPEN=<folder> opens that shoot at startup, skipping the picker.
@@ -1418,6 +1428,13 @@ fn main() {
             if let Ok(config) = app.path().app_config_dir() {
                 std::thread::spawn(move || desktop::pin_once(config));
             }
+            if let Ok(script) = std::env::var("KB_STUDIO_TEST").map(fs::read_to_string) {
+                let (script, window) = (script?, app.get_webview_window("main"));
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    window.map(|w| w.eval(&script));
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1427,6 +1444,7 @@ fn main() {
             quit,
             pick_shoot,
             startup_shoot,
+            test_out,
             open_shoot,
             preview,
             thumb,
