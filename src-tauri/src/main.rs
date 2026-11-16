@@ -637,8 +637,13 @@ async fn blur_picture_background(request: tauri::ipc::Request<'_>) -> Result<Res
         return Err("blur_picture_background needs the picture as its body".into());
     };
     let amount: f32 = header(&request, "amount")?.parse().map_err(|_| "bad blur amount")?;
-    let (w, h, rgba) = picture_body(body, 0)?;
-    tauri::async_runtime::spawn_blocking(move || Ok(Response::new(focus::blur_background(w, h, &rgba, amount)?.unwrap_or_default())))
+    // With a `chosen` header her own selection follows the picture, a byte a pixel, and stays sharp.
+    let chosen = request.headers().contains_key("chosen");
+    let (w, h, bytes) = picture_body(body, chosen as usize)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (rgba, mask) = bytes.split_at(w * h * 4);
+        Ok(Response::new(focus::blur_background(w, h, rgba, amount, chosen.then_some(mask))?.unwrap_or_default()))
+    })
         .await
         .map_err(|e| e.to_string())?
 }

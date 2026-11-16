@@ -43,20 +43,28 @@ fn transpose(v: &[f32], w: usize, h: usize, ch: usize) -> Vec<f32> {
 }
 
 /// The `w` × `h` RGBA picture with what's behind its main thing blurred; `amount` is 1–100. None when
-/// nothing stands out from the background.
-pub fn blur_background(w: usize, h: usize, rgba: &[u8], amount: f32) -> Result<Option<Vec<u8>>, String> {
+/// nothing stands out from the background. `chosen` is her own selection (a byte a pixel), kept sharp
+/// in place of what the subject finder would pick.
+pub fn blur_background(w: usize, h: usize, rgba: &[u8], amount: f32, chosen: Option<&[u8]>) -> Result<Option<Vec<u8>>, String> {
     if !(1.0..=100.0).contains(&amount) {
         return Err("the blur amount must be 1–100".into());
     }
-    let Some(region) = crate::cutout::select(w, h, rgba, &crate::cutout::Pick::Subject)? else { return Ok(None) };
     let long = w.max(h) as f32;
-    // The subject's coverage over the whole picture, its edge softened a little so the change is gentle.
+    // What stays sharp, as coverage over the whole picture, its edge softened a little so the change is gentle.
     let mut keep = vec![0f32; w * h];
-    let (bw, x0, y0) = (region.bbox.width() as usize, region.bbox.x0 as usize, region.bbox.y0 as usize);
-    for (i, &m) in region.mask.iter().enumerate() {
-        let (x, y) = (x0 + i % bw, y0 + i / bw);
-        if x < w && y < h {
-            keep[y * w + x] = m as f32 / 255.0;
+    if let Some(mask) = chosen {
+        if mask.len() != w * h || rgba.len() != w * h * 4 {
+            return Err("the selection is not the picture's size".into());
+        }
+        keep.iter_mut().zip(mask).for_each(|(k, &m)| *k = m as f32 / 255.0);
+    } else {
+        let Some(region) = crate::cutout::select(w, h, rgba, &crate::cutout::Pick::Subject)? else { return Ok(None) };
+        let (bw, x0, y0) = (region.bbox.width() as usize, region.bbox.x0 as usize, region.bbox.y0 as usize);
+        for (i, &m) in region.mask.iter().enumerate() {
+            let (x, y) = (x0 + i % bw, y0 + i / bw);
+            if x < w && y < h {
+                keep[y * w + x] = m as f32 / 255.0;
+            }
         }
     }
     blur(&mut keep, w, h, 1, (long * 0.002).round() as usize);
@@ -109,7 +117,7 @@ mod tests {
     #[test]
     fn the_background_goes_soft_and_the_subject_stays_sharp() {
         let (w, h, img) = disc();
-        let out = blur_background(w, h, &img, 60.0).unwrap().expect("the disc stands out");
+        let out = blur_background(w, h, &img, 60.0, None).unwrap().expect("the disc stands out");
         // The stripes average out to grey, and grey from the stripes, not pink from the disc.
         for (x, y) in [(10, 10), (230, 150), (20, 80)] {
             let [r, g, b] = px(&out, w, x, y);
@@ -124,7 +132,7 @@ mod tests {
     #[test]
     fn nothing_standing_out_is_left_alone() {
         let (w, h) = (100, 60);
-        assert_eq!(blur_background(w, h, &vec![128u8; w * h * 4], 50.0).unwrap(), None);
+        assert_eq!(blur_background(w, h, &vec![128u8; w * h * 4], 50.0, None).unwrap(), None);
     }
 
     /// cargo test --release focus -- --ignored --nocapture
@@ -139,14 +147,27 @@ mod tests {
             p.copy_from_slice(&c);
         }
         let t = std::time::Instant::now();
-        blur_background(w, h, &px, 100.0).unwrap();
+        blur_background(w, h, &px, 100.0, None).unwrap();
         eprintln!("blur_background at {w} × {h}: {:?}", t.elapsed());
     }
 
     #[test]
     fn a_bad_amount_is_refused() {
         let (w, h, img) = disc();
-        assert!(blur_background(w, h, &img, 0.0).is_err());
-        assert!(blur_background(w, h, &img, 101.0).is_err());
+        assert!(blur_background(w, h, &img, 0.0, None).is_err());
+        assert!(blur_background(w, h, &img, 101.0, None).is_err());
+    }
+
+    /// Her own selection decides what stays sharp: here the left half, whatever the picture shows.
+    #[test]
+    fn a_chosen_part_stays_sharp() {
+        let (w, h) = (80, 60);
+        let img: Vec<u8> = (0..w * h).flat_map(|i| { let v = if (i % w + i / w) % 2 == 0 { 30 } else { 220 }; [v, v, v, 255] }).collect();
+        let chosen: Vec<u8> = (0..w * h).map(|i| if i % w < w / 2 { 255 } else { 0 }).collect();
+        let out = blur_background(w, h, &img, 100.0, Some(&chosen)).unwrap().unwrap();
+        let at = |x: usize, y: usize| (out[(y * w + x) * 4], img[(y * w + x) * 4]);
+        assert_eq!(at(10, 30).0, at(10, 30).1, "chosen part untouched");
+        assert!((at(70, 30).0 as i32 - 125).abs() < 30, "the rest averaged out: {}", at(70, 30).0);
+        assert!(blur_background(w, h, &img, 50.0, Some(&chosen[1..])).is_err());
     }
 }

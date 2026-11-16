@@ -422,13 +422,14 @@ $('#cut-focus').onclick = () => cutQueued(async () => {
   }
   const image = cut.image, work = await touchPixels(cut.base), { width: w, height: h } = work.canvas;
   cutSay('Blurring the background…');
-  const out = new Uint8Array(await invoke('blur_picture_background', await cutBody(), { headers: { amount: String(+$('#cut-focus-amount').value) } }));
-  if (!out.length) return cutSay("Couldn't tell what's in front. Choose it with a brush and use Adjust this part instead.");
+  const chosen = cut.any ? cut.mask : null; // what she chose stays sharp; with nothing chosen, Rust finds the people or the main thing
+  const out = new Uint8Array(await invoke('blur_picture_background', await cutBody(chosen), { headers: { amount: String(+$('#cut-focus-amount').value), ...(chosen ? { chosen: '1' } : {}) } }));
+  if (!out.length) return cutSay("Couldn't tell what's in front. Choose it with a brush below, then press Blur the background again.");
   const canvas = pictureCanvas(w, h);
   canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(out.buffer, 0, w * h * 4), w, h), 0, 0);
   if (await setPicture(image, { original: canvas.toDataURL(work.clear ? 'image/png' : 'image/jpeg', 0.92) })) {
     await chooseCutPicture(image);
-    cutSay('Background blurred. Undo puts it back.');
+    cutSay(chosen ? 'Blurred around what you chose. Undo puts it back.' : 'Background blurred. Undo puts it back. To pick what stays sharp yourself, choose it with a brush first.');
   }
 });
 // Make the paper (or a picked colour) see-through: the picture's own pixels gain transparency, so Undo takes it back.
