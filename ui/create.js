@@ -1899,6 +1899,34 @@ function paintColours() {
   }));
   if (!$('#colours-default').children.length) $('#colours-default').replaceChildren(...DEFAULT_COLOURS.map(swatch));
   if (design && board) $('#colours-document').replaceChildren(...documentColours().map(swatch));
+  // The selected picture first, then the others on this page.
+  const active = board?.getActiveObject(), photos = board ? [active, ...board.getObjects()].filter(o => o?.type === 'image') : [];
+  const photoColours = [...new Set([...new Set(photos)].slice(0, 3).flatMap(o => pictureColours(o.getElement())))].slice(0, 18);
+  $('#colours-photo-head').hidden = !photoColours.length;
+  $('#colours-photo').replaceChildren(...photoColours.map(swatch));
+}
+// The main colours of a picture, most common first: count 64×64 pixels in coarse bins, then keep bins that differ enough.
+const photoPalettes = new WeakMap();
+function pictureColours(el) {
+  if (photoPalettes.has(el)) return photoPalettes.get(el);
+  const c = Object.assign(document.createElement('canvas'), { width: 64, height: 64 }), g = c.getContext('2d', { willReadFrequently: true });
+  let px;
+  try { g.drawImage(el, 0, 0, 64, 64); px = g.getImageData(0, 0, 64, 64).data; } catch { return []; }
+  const bins = new Map();
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 128) continue; // cut-out pixels are not part of the photo
+    const k = (px[i] >> 4) << 8 | (px[i + 1] >> 4) << 4 | px[i + 2] >> 4, b = bins.get(k) || [0, 0, 0, 0];
+    b[0] += px[i]; b[1] += px[i + 1]; b[2] += px[i + 2]; b[3]++; bins.set(k, b);
+  }
+  const kept = [];
+  for (const [r, gr, bl, n] of [...bins.values()].sort((a, b) => b[3] - a[3])) {
+    const rgb = [r / n, gr / n, bl / n].map(Math.round);
+    if (kept.every(k => Math.hypot(k[0] - rgb[0], k[1] - rgb[1], k[2] - rgb[2]) > 48)) kept.push(rgb);
+    if (kept.length === 6) break;
+  }
+  const out = kept.map(rgb => '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join(''));
+  photoPalettes.set(el, out);
+  return out;
 }
 $('#colours-open').addEventListener('click', paintColours);
 $('#colour-save').onclick = () => {

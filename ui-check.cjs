@@ -2052,6 +2052,14 @@ const test = `<script>
     $('#colours-open').click();
     const docColours = [...$('#colours-document').children].map(b => b.dataset.colour);
     step(docColours.includes('#ff3131') && docColours.includes('#5e17eb') && docColours.includes('#ffffff') && $('#colours-default').children.length === DEFAULT_COLOURS.length, () => "the colour panel shows this design's colours and a default palette: " + docColours);
+    step($('#colours-photo-head').hidden && !$('#colours-photo').children.length, 'with no photo there is no From photos row');
+    const halves = Object.assign(document.createElement('canvas'), { width: 32, height: 32 }), halvesG = halves.getContext('2d');
+    halvesG.fillStyle = '#e02020'; halvesG.fillRect(0, 0, 32, 20); halvesG.fillStyle = '#2040e0'; halvesG.fillRect(0, 20, 32, 12);
+    const colourPhoto = new kbe.Image(halves); board.add(colourPhoto); board.discardActiveObject(); paintColours();
+    const photoColourList = [...$('#colours-photo').children].map(b => b.dataset.colour);
+    step(!$('#colours-photo-head').hidden && photoColourList[0] === '#e02020' && photoColourList[1] === '#2040e0', () => "From photos shows a photo's main colours, most common first: " + photoColourList);
+    $('#colours-photo').children[1].click(); board.remove(colourPhoto); paintColours();
+    step(board.backgroundColor === '#2040e0' && $('#colours-photo-head').hidden, () => 'a photo colour applies like any swatch, and the row goes with the photo: ' + board.backgroundColor);
     selectObjects([effectText]);
     $('#colours-default').querySelector('[data-colour="#00bf63"]').click();
     step(effectText.fill === '#00bf63' && $('#prop-fill').value === '#00bf63', 'a default colour applies to the selection');

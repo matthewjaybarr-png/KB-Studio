@@ -10,6 +10,7 @@
 - Create's Edit photo Effects tab has Fix blur: it firms up a slightly soft or out-of-focus photo. It can't fix camera shake or heavy blur.
 - Develop's Crop has Vertical and Horizontal: they fix lines that lean in when you tilt the camera up at a building or shoot at an angle. Edits that use them need this version or newer to open.
 - Develop has Local adjustments (the Local button on the left): add a gradient or a circle, drag it out on the photo, then change the Light, Warmth and Saturation of just that part, such as darkening a bright sky or lifting a face. "Outside the circle" changes everything else instead. Edits that use them need this version or newer to open.
+- Create's Colours panel has From photos: the main colours of the photos on the page (the selected one first), ready to use on text, shapes or the background.
 - Deliver has a Copyright field: the text is written into each delivered photo's details (EXIF).
 
 ## 1.0.0
