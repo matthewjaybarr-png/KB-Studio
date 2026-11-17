@@ -15,6 +15,7 @@ mod faces;
 mod photocraft;
 mod photocraft_faces;
 mod photocraft_redeye;
+mod fill;
 mod photocraft_remove;
 mod photocraft_scancrop;
 mod photocraft_seam;
@@ -226,6 +227,15 @@ async fn pick_shoot(app: tauri::AppHandle, title: Option<String>) -> Option<Stri
         .into_path()
         .ok()
         .map(|p| p.display().to_string())
+}
+
+/// Testing the real window: KB_STUDIO_TEST=<script.js> runs that script in the page a few seconds after
+/// start, and KB_STUDIO_TEST_OUT=<folder> lets it write result files there with `test_out`.
+#[tauri::command]
+fn test_out(name: String, text: String) -> Result<(), String> {
+    let dir = std::env::var("KB_STUDIO_TEST_OUT").map_err(|_| "not testing".to_string())?;
+    let name = Path::new(&name).file_name().ok_or("bad name")?;
+    fs::write(Path::new(&dir).join(name), text).map_err(|e| e.to_string())
 }
 
 /// Development and testing: KB_STUDIO_OPEN=<folder> opens that shoot at startup, skipping the picker.
@@ -637,8 +647,13 @@ async fn blur_picture_background(request: tauri::ipc::Request<'_>) -> Result<Res
         return Err("blur_picture_background needs the picture as its body".into());
     };
     let amount: f32 = header(&request, "amount")?.parse().map_err(|_| "bad blur amount")?;
-    let (w, h, rgba) = picture_body(body, 0)?;
-    tauri::async_runtime::spawn_blocking(move || Ok(Response::new(focus::blur_background(w, h, &rgba, amount)?.unwrap_or_default())))
+    // With a `chosen` header her own selection follows the picture, a byte a pixel, and stays sharp.
+    let chosen = request.headers().contains_key("chosen");
+    let (w, h, bytes) = picture_body(body, chosen as usize)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (rgba, mask) = bytes.split_at(w * h * 4);
+        Ok(Response::new(focus::blur_background(w, h, rgba, amount, chosen.then_some(mask))?.unwrap_or_default()))
+    })
         .await
         .map_err(|e| e.to_string())?
 }
@@ -1413,6 +1428,13 @@ fn main() {
             if let Ok(config) = app.path().app_config_dir() {
                 std::thread::spawn(move || desktop::pin_once(config));
             }
+            if let Ok(script) = std::env::var("KB_STUDIO_TEST").map(fs::read_to_string) {
+                let (script, window) = (script?, app.get_webview_window("main"));
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    window.map(|w| w.eval(&script));
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1422,6 +1444,7 @@ fn main() {
             quit,
             pick_shoot,
             startup_shoot,
+            test_out,
             open_shoot,
             preview,
             thumb,

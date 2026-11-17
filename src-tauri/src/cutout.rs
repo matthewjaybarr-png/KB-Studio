@@ -63,6 +63,47 @@ fn check(w: usize, h: usize, rgba: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// The people in the picture as one selection: every face found marks a box around the person it
+/// belongs to, and Box select finds that person inside it. None when there is no face, so the
+/// subject finder decides. People are what a family photo is of, whatever else stands out in it.
+fn people(w: usize, h: usize, rgba: &[u8], picture: &Picture, canvas: Rect) -> Option<Region> {
+    let faces = crate::faces::find(w, h, rgba).ok()?;
+    let mut mask = vec![0u8; w * h];
+    let mut any = false;
+    for [x, y, fw, fh] in faces.iter().map(|f| f.rect) {
+        // Shoulders are about three faces wide and a standing child about seven faces tall.
+        let around = Rect::new(
+            ((x - fw * 1.25).floor() as i32).max(0),
+            ((y - fh * 0.75).floor() as i32).max(0),
+            ((x + fw * 2.25).ceil() as i32).min(w as i32),
+            ((y + fh * 8.5).ceil() as i32).min(h as i32),
+        );
+        // The head itself always belongs: skin against a wall of a like colour is where Box select gives up.
+        // An oval over the face and hair, and the neck under it.
+        let (cx, cy, rx, ry) = (x + fw / 2.0, y + fh * 0.42, fw * 0.62, fh * 0.78);
+        for py in around.y0.max(0)..((y + fh * 1.45).ceil() as i32).min(h as i32) {
+            for px in around.x0..around.x1 {
+                let (dx, dy) = ((px as f32 + 0.5 - cx) / rx, (py as f32 + 0.5 - cy) / ry);
+                let neck = (px as f32 + 0.5 - cx).abs() < fw * 0.3 && py as f32 > cy;
+                if dx * dx + dy * dy <= 1.0 || neck {
+                    mask[py as usize * w + px as usize] = 255;
+                    any = true;
+                }
+            }
+        }
+        let Some(person) = grabcut::object_select(picture, canvas, around, subject::WORK_PX) else { continue };
+        let bw = person.bbox.width() as usize;
+        for (i, &m) in person.mask.iter().enumerate() {
+            let (px, py) = (person.bbox.x0 as usize + i % bw, person.bbox.y0 as usize + i / bw);
+            if px < w && py < h {
+                mask[py * w + px] = mask[py * w + px].max(m);
+                any |= m > 0;
+            }
+        }
+    }
+    any.then_some(Region { bbox: canvas, mask })
+}
+
 /// The selection a pick makes, as a region of the picture (`None` when it finds nothing).
 pub fn select(w: usize, h: usize, rgba: &[u8], pick: &Pick) -> Result<Option<Region>, String> {
     check(w, h, rgba)?;
@@ -76,7 +117,7 @@ pub fn select(w: usize, h: usize, rgba: &[u8], pick: &Pick) -> Result<Option<Reg
         Ok(((p[0] * w as f64) as f32, (p[1] * h as f64) as f32))
     };
     Ok(match pick {
-        Pick::Subject => subject::select_subject(&picture, canvas),
+        Pick::Subject => people(w, h, rgba, &picture, canvas).or_else(|| subject::select_subject(&picture, canvas)),
         Pick::Box { rect } => {
             let (x0, y0) = px([rect[0], rect[1]])?;
             let (x1, y1) = px([rect[2], rect[3]])?;
@@ -194,6 +235,25 @@ fn follow_edges(img: &RgbImage, m: &[f32], radius: f32) -> Vec<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Looking at what Subject picks in a real photo: PIC=photo.jpg OUT=mask.pgm cargo test --release dump_subject -- --ignored
+    #[test]
+    #[ignore]
+    fn dump_subject() {
+        let img = image::open(std::env::var("PIC").expect("set PIC")).unwrap().to_rgba8();
+        let (w, h) = (img.width() as usize, img.height() as usize);
+        let faces = crate::faces::find(w, h, &img).unwrap();
+        println!("{w}x{h}, faces: {:?}", faces.iter().map(|f| (f.score, f.rect)).collect::<Vec<_>>());
+        let region = select(w, h, &img, &Pick::Subject).unwrap().expect("nothing found");
+        let mut full = vec![0u8; w * h];
+        let bw = region.bbox.width() as usize;
+        for (i, &m) in region.mask.iter().enumerate() {
+            full[(region.bbox.y0 as usize + i / bw) * w + region.bbox.x0 as usize + i % bw] = m;
+        }
+        let mut out = format!("P5 {w} {h} 255\n").into_bytes();
+        out.extend(full);
+        std::fs::write(std::env::var("OUT").expect("set OUT"), out).unwrap();
+    }
 
     /// A red disc on a blue-grey background with a little noise.
     fn disc(w: usize, h: usize) -> Vec<u8> {

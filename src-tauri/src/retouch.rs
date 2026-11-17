@@ -306,8 +306,14 @@ fn remove(img: &mut [f32], w: usize, h: usize, n: usize, stroke: &Stroke, rect: 
     }
     let hole = dilate(cw, chh, &close_loops(cw, chh, &brushed), halo);
     let crop: Vec<f32> = (cy0..cy1).flat_map(|y| img[(y * w + cx0) * n..(y * w + cx1) * n].iter().copied()).collect();
-    let Ok(filled) = remove_with(cw, chh, n, &crop, &hole, 1, &Interrupt::NONE) else {
-        return Rect::default();
+    // KB_NEW_FILL=1 tries KB Studio's own fill (fill.rs), which is not yet as good on every picture.
+    let filled = if std::env::var_os("KB_NEW_FILL").is_none() {
+        let Ok(filled) = remove_with(cw, chh, n, &crop, &hole, 1, &Interrupt::NONE) else {
+            return Rect::default();
+        };
+        filled
+    } else {
+        crate::fill::fill(cw, chh, n, &crop, &hole)
     };
     let (mut x0, mut y0, mut x1, mut y1) = (cw, chh, 0, 0);
     for (i, _) in hole.iter().enumerate().filter(|(_, m)| **m) {
@@ -542,6 +548,30 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Looking at Remove on a real photo: PIC=photo.jpg BOX=left,top,right,bottom (0-1) OUT=out.ppm
+    /// cargo test --release dump_remove -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn dump_remove() {
+        let pic = image::open(std::env::var("PIC").expect("set PIC")).unwrap().to_rgba8();
+        let (w, h) = (pic.width() as usize, pic.height() as usize);
+        let b: Vec<f64> = std::env::var("BOX").expect("set BOX").split(',').map(|v| v.parse().unwrap()).collect();
+        let size = 0.02;
+        let mut points = Vec::new();
+        let mut y = b[1];
+        while y <= b[3] {
+            points.extend([[b[0], y], [b[2], y]]);
+            y += size * 0.8 * w.max(h) as f64 / h as f64;
+        }
+        let mut rgba = pic.into_raw();
+        let t = std::time::Instant::now();
+        let r = retouch_picture(w, h, &mut rgba, vec![stroke(Tool::Remove, size, &points)]).unwrap();
+        eprintln!("removed {}x{} in {:?}", r.w, r.h, t.elapsed());
+        let mut out = format!("P6 {w} {h} 255\n").into_bytes();
+        out.extend(rgba.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]));
+        std::fs::write(std::env::var("OUT").expect("set OUT"), out).unwrap();
     }
 
     #[test]
