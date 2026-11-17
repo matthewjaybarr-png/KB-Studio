@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Create's picture Filters have Duotone: shadows and highlights become two colours. Pick one of six pairs or choose your own Shadows and Highlights colours; None takes it off and keeps any look.
+
 ## 1.1.0
 
 - Develop has a Colour mixer: pick one of eight colours (red to magenta) and change its hue, saturation and brightness without touching the other colours or greys. "Reset colour mixer" clears it. Edits made with it need this version or newer to open.

@@ -1295,13 +1295,24 @@ async function filterPicture(src, filter, edge = Infinity) {
   filterer.setRaw(bytes, false);
   const out = filterer.pixels(fullRecipe(filter), Math.max(w, h));
   if (clear) for (let i = 3; i < source.length; i += 4) out.data[i] = source[i]; // clip art keeps its transparency
+  const tones = duotoneOf(filter?.duotone);
+  if (tones) for (let i = 0, d = out.data; i < d.length; i += 4) { // shadows take the first colour, highlights the second
+    const y = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+    for (let c = 0; c < 3; c++) d[i + c] = Math.round(tones[0][c] + (tones[1][c] - tones[0][c]) * y);
+  }
   ctx.putImageData(out, 0, 0);
   return ctx.canvas.toDataURL(clear || src.startsWith('data:image/png') ? 'image/png' : 'image/jpeg', 0.92);
+}
+// Duotone: "#shadow,#highlight", as Canva's photo Duotone; anything else (a damaged file) is no duotone.
+const DUOTONES = [['Midnight', '#1b1f5e,#ff8fab'], ['Ocean', '#0b3954,#7fe7dc'], ['Forest', '#1e3d2f,#e9f5a1'], ['Sunset', '#5b1a4a,#ffc15e'], ['Berry', '#3a0ca3,#f72585'], ['Sepia', '#3b2412,#f3e1c0']];
+function duotoneOf(v) {
+  if (typeof v !== 'string' || !/^#[0-9a-f]{6},#[0-9a-f]{6}$/i.test(v)) return null;
+  return v.split(',').map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
 }
 // Settings left at their defaults are dropped; nothing left means no filter.
 function cleanFilter(f) {
   const out = {};
-  for (const [k, v] of Object.entries(f || {})) if (k === 'look' || k === 'preset' ? v : k === 'lookAmount' ? f.look && v !== 100 : v !== 0) out[k] = v;
+  for (const [k, v] of Object.entries(f || {})) if (k === 'look' || k === 'preset' ? v : k === 'duotone' ? duotoneOf(v) : k === 'lookAmount' ? f.look && v !== 100 : v !== 0) out[k] = v;
   return Object.keys(out).length ? out : null;
 }
 function setFilter(image, filter) {
@@ -1389,6 +1400,12 @@ function paintFilters() {
   $('#filter-presets').replaceChildren(...mine.map(p => tile('preset:' + p.name, p.name, p.recipe, current.preset === p.name, () => setFilter(image, { ...p.recipe, preset: p.name }))));
   $('#filter-strength').value = current.look ? current.lookAmount ?? 100 : strength;
   $('#filter-strength').disabled = !current.look;
+  const tones = duotoneOf(current.duotone);
+  $('#filter-duotones').replaceChildren(
+    tile('duotone:none', 'None', {}, !tones, () => setFilter(image, { ...current, duotone: '' })),
+    ...DUOTONES.map(([name, v]) => tile('duotone:' + v, name, { duotone: v }, current.duotone === v, () => setFilter(image, { ...current, duotone: v }))));
+  $('#duotone-dark').value = current.duotone?.slice(0, 7) || DUOTONES[0][1].slice(0, 7);
+  $('#duotone-light').value = current.duotone?.slice(8) || DUOTONES[0][1].slice(8);
   $('#filter-adjust').replaceChildren(...ADJUST.map(([key, label, min, max, step]) => {
     const row = document.createElement('label'), input = Object.assign(document.createElement('input'), { type: 'range', min, max, step, value: current[key] || 0 });
     input.dataset.adjust = key;
@@ -1400,6 +1417,7 @@ function paintFilters() {
 }
 $('#filters-open').addEventListener('click', paintFilters);
 $('#filter-strength').onchange = e => { const image = filterTarget(); if (image?.kbFilter?.look) setFilter(image, { ...image.kbFilter, lookAmount: +e.target.value }); };
+for (const id of ['#duotone-dark', '#duotone-light']) $(id).onchange = () => { const image = filterTarget(); if (image) setFilter(image, { ...(image.kbFilter || {}), duotone: $('#duotone-dark').value + ',' + $('#duotone-light').value }); };
 $('#filter-remove').onclick = () => { const image = filterTarget(); if (image) setFilter(image, null); };
 // Fabric owns the crop controls and boardPan; this session only handles Apply/Cancel.
 async function startPictureCrop() {

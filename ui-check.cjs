@@ -2144,6 +2144,21 @@ const test = `<script>
     await until(() => !reopenedPic.kbFilter && !reopenedPic.kbOriginal && reopenedPic.getSrc() === originalSrc && reopenedPic.cropX === 20, 'Remove filter goes back to the original exactly');
     $('#create-undo').click();
     await until(() => board.getObjects()[0]?.kbFilter?.look === 'bw' && !restoring, 'undo brings the filter back');
+    // Duotone: shadows and highlights become two chosen colours, on top of the look.
+    { const duoPic = board.getObjects()[0]; selectObjects([duoPic]); $('#filters-open').click();
+      await until(() => $('#filter-duotones').children.length === DUOTONES.length + 1 && $('#filter-duotones .on')?.dataset.filter === 'duotone:none', 'Duotone offers None and its colour pairs');
+      $('#filter-duotones [data-filter="duotone:#0b3954,#7fe7dc"]').click();
+      await until(() => duoPic.kbFilter?.duotone === '#0b3954,#7fe7dc' && duoPic.kbFilter.look === 'bw' && $('#filter-duotones .on')?.dataset.filter === 'duotone:#0b3954,#7fe7dc', 'choosing Ocean adds a duotone and keeps the look');
+      const duoPx = await pixelOf(duoPic.getSrc()), duoT = (duoPx[0] - 0x0b) / (0x7f - 0x0b);
+      step(duoT > 0.05 && duoT < 0.95 && [0x39, 0x54].every((d, i) => Math.abs(duoPx[i + 1] - (d + ([0xe7, 0xdc][i] - d) * duoT)) <= 4), () => 'its colours lie between the two Ocean colours: ' + duoPx);
+      put($('#duotone-dark'), '#000000', 'change'); put($('#duotone-light'), '#ff0000', 'change');
+      await until(() => duoPic.kbFilter?.duotone === '#000000,#ff0000', 'the colour pickers make a custom duotone');
+      const redPx = await pixelOf(duoPic.getSrc());
+      step(redPx[0] > 20 && redPx[1] <= 2 && redPx[2] <= 2, () => 'a black and red duotone has only reds: ' + redPx);
+      step(cleanFilter({ duotone: 'nonsense' }) === null && cleanFilter({ duotone: '' }) === null, 'a damaged or empty duotone is no filter');
+      $('#filter-duotones [data-filter="duotone:none"]').click();
+      await until(() => duoPic.kbFilter && !('duotone' in duoPic.kbFilter) && duoPic.kbFilter.look === 'bw', 'None takes the duotone off and keeps the look');
+    }
     // Clip art keeps its transparency.
     const clearCanvas = Object.assign(document.createElement('canvas'), { width: 40, height: 40 }), clearCtx = clearCanvas.getContext('2d');
     clearCtx.fillStyle = '#ff0000'; clearCtx.fillRect(0, 0, 20, 40);
