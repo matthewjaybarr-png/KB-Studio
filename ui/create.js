@@ -1823,6 +1823,8 @@ async function addPage(page = blankPage()) {
   if (designPages.length >= MAX_PAGES || !pageReady()) return;
   await Promise.allSettled([...adding]);
   designPages[pageAt] = board.toObject(KEEP);
+  // A new page joins numbered pages with its own number, so every page still has one.
+  if (designPages.some(p => p.objects?.some(o => o.kbPageNo)) && !page.objects?.some(o => o.kbPageNo)) page = { ...page, objects: [...page.objects || [], pageNumberBox(pageAt + 1)] };
   designPages.splice(pageAt + 1, 0, page);
   await loadPage(pageAt + 1);
   renumberPages(); commitDesign(); paintAll();
@@ -1849,14 +1851,17 @@ function renumberPages() {
   for (const o of board.getObjects()) if (o.kbPageNo && o.text !== String(pageAt + 1)) o.set('text', String(pageAt + 1));
   board.requestRenderAll();
 }
+function pageNumberBox(i) {
+  const [w, h] = pagePx();
+  return new kbe.Textbox(String(i + 1), { left: w / 2 - 60, top: h - PX / 2 - 34, width: 120, fontSize: 28, fontFamily: settings.fonts[0] || FONTS[0], fill: textColour(), textAlign: 'center', kbName: 'Page number', kbPageNo: true }).toObject(KEEP);
+}
 // The button adds a number at the foot of every page, or takes them all away when the pages already have them.
 async function togglePageNumbers() {
   if (!design || !pageReady()) return;
   await Promise.allSettled([...adding]);
   designPages[pageAt] = board.toObject(KEEP);
-  const on = designPages.some(p => p.objects.some(o => o.kbPageNo)), [w, h] = pagePx();
-  const box = i => new kbe.Textbox(String(i + 1), { left: w / 2 - 60, top: h - PX / 2 - 34, width: 120, fontSize: 28, fontFamily: settings.fonts[0] || FONTS[0], fill: textColour(), textAlign: 'center', kbName: 'Page number', kbPageNo: true }).toObject(KEEP);
-  designPages = designPages.map((p, i) => ({ ...p, objects: on ? p.objects.filter(o => !o.kbPageNo) : [...p.objects, box(i)] }));
+  const on = designPages.some(p => p.objects.some(o => o.kbPageNo));
+  designPages = designPages.map((p, i) => ({ ...p, objects: on ? p.objects.filter(o => !o.kbPageNo) : [...p.objects, pageNumberBox(i)] }));
   await loadPage(pageAt);
   commitDesign(); paintAll();
 }

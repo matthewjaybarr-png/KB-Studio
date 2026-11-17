@@ -2025,6 +2025,10 @@ const test = `<script>
     step(nums() === '1|2', () => 'deleting a page renumbers the rest: ' + nums());
     $('#create-undo').click();
     await until(() => designPages.length === 3 && !restoring, 'undo brings it back');
+    $('#page-add').click();
+    await until(() => designPages.length === 4 && !restoring && nums() === '1|2|3|4', () => 'a page added to numbered pages gets its own number: ' + nums());
+    $('#page-delete').click();
+    await until(() => designPages.length === 3 && !restoring && nums() === '1|2|3', () => 'and deleting it leaves the rest in order: ' + nums());
     $('#page-numbers').click();
     await until(() => nums() === '||' && !restoring && $('#page-numbers').textContent === '# Add page numbers', () => 'clicked again, the numbers go: ' + nums());
     await flush();
