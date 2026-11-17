@@ -441,6 +441,7 @@ function openDesign(name) {
   });
 }
 async function uniqueTitle(base) {
+  base = cleanTitle(base) || 'Untitled'; // a worksheet called "What comes next?" could never be saved: ? can't be in a file name
   const taken = new Set((await invoke('list_creations', { kind: 'designs' }).catch(() => [])).map(d => d.name));
   let title = base, n = 2;
   while (taken.has(title)) title = `${base} ${n++}`;
