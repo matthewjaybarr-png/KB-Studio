@@ -236,8 +236,14 @@ for (const s of SLIDERS) {
   if (s.group) sliders.insertAdjacentHTML('beforeend', `<h3>${s.group}</h3>`);
   if (s.group === 'Look') sliders.insertAdjacentHTML('beforeend', `<select id="look" aria-label="Look"><option value="">None</option>${
     [...new Set(LOOKS.map(l => l.group).filter(Boolean))].map(group => `<optgroup label="${group}"></optgroup>`).join('')}</select>`);
-  sliders.insertAdjacentHTML('beforeend', `<label><span>${s.label}</span><output></output><input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.default ?? 0}" data-key="${s.key}"${s.hue ? ` class="hue" style="background:${hueTrack()}"` : ''}></label>`);
+  if (s.group === 'Colour mixer') sliders.insertAdjacentHTML('beforeend', `<div class="bands">${MIX_BANDS.map(([band, name]) =>
+    `<button type="button" data-band="${band}" title="${name}" aria-label="${name}"></button>`).join('')}</div>`);
+  // The window's CSP ignores style attributes, so the swatch colours go in through the DOM.
+  if (s.group === 'Colour mixer') sliders.querySelectorAll('.bands button').forEach((b, i) => { b.style.background = MIX_BANDS[i][3]; });
+  sliders.insertAdjacentHTML('beforeend', `<label${s.band ? ` data-band="${s.band}"` : ''}><span>${s.label}</span><output></output><input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.default ?? 0}" data-key="${s.key}"${s.hue ? ` class="hue" style="background:${hueTrack()}"` : ''}></label>`);
+  if (s.key === MIX_KEYS.at(-1)) sliders.insertAdjacentHTML('beforeend', '<button id="mix-reset" type="button">Reset colour mixer</button>');
 }
+let mixBand = 'red'; // the colour mixer band whose sliders show
 { // each look under the group named on it or the one before
   let group;
   for (const l of LOOKS) { group = l.group || group; $(`#look optgroup[label="${group}"]`).append(new Option(l.name, l.id)); }
@@ -296,6 +302,11 @@ function paintSliders() {
     input.value = v;
     input.previousElementSibling.textContent = showValue(s, v);
   }
+  for (const el of sliders.querySelectorAll('[data-band]')) {
+    if (el.tagName === 'LABEL') el.hidden = el.dataset.band !== mixBand;
+    else { el.classList.toggle('on', el.dataset.band === mixBand); el.classList.toggle('moved', MIX_KEYS.some(k => k.startsWith(el.dataset.band) && editing?.recipe[k])); }
+  }
+  $('#mix-reset').disabled = !MIX_KEYS.some(k => editing?.recipe[k]);
   $('#look').value = editing?.recipe.look || '';
   sliders.querySelector('[data-key=lookAmount]').disabled = !editing?.recipe.look;
   const crop = cropping?.crop || editing?.recipe.crop || NO_CROP, angle = sliders.querySelector('[data-crop=angle]');
@@ -760,6 +771,13 @@ sliders.addEventListener('dblclick', event => {
   editing.recipe = { ...editing.recipe, [key]: SLIDERS.find(s => s.key === key).default ?? 0 };
   commit(editing, was);
 });
+sliders.querySelector('.bands').onclick = event => { if (event.target.dataset.band) { mixBand = event.target.dataset.band; paintSliders(); } };
+$('#mix-reset').onclick = () => {
+  if (!editing) return;
+  const was = editing.recipe;
+  editing.recipe = { ...was, ...Object.fromEntries(MIX_KEYS.map(k => [k, 0])) };
+  commit(editing, was);
+};
 $('#reset').onclick = () => {
   $('#reset').blur();
   if (!editing) return;

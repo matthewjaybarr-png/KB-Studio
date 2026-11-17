@@ -78,6 +78,11 @@ figcaption{position:absolute;left:6px;bottom:4px;font-size:12px;color:var(--phot
 #sliders input:disabled{opacity:.35}
 #sliders input.hue{appearance:none;height:8px;border-radius:4px;margin:8px 0}
 #sliders input.hue::-webkit-slider-thumb{appearance:none;width:14px;height:14px;border-radius:50%;background:var(--text);border:2px solid var(--deep)}
+#sliders .bands{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;margin:6px 0 2px}
+#sliders .bands button{position:relative;margin:0;padding:0;width:100%;max-width:24px;height:auto;border-radius:50%;border:2px solid var(--deep);aspect-ratio:1;justify-self:center}
+#sliders .bands button.on{outline:2px solid var(--text);outline-offset:1px}
+#sliders .bands button.moved::after{content:'';position:absolute;right:-4px;top:-4px;width:7px;height:7px;border-radius:50%;background:var(--text);border:1px solid var(--deep)}
+#sliders #mix-reset{margin-top:8px}
 #sliders .tools{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 #sliders .tools button{margin:0;padding:6px 4px}
 #sliders .tools button.active{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}

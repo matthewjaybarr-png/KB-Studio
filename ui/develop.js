@@ -3,6 +3,12 @@
 // strokes already applied. At the default recipe a JPEG renders as itself; a RAW gets a gentle base look so it
 // starts close to what the camera would have made.
 
+// Colour mixer bands: key, name, centre as an OkLab hue in degrees (where pure sRGB red, yellow, green, cyan,
+// blue and magenta sit, orange and purple between), and a swatch for the band picker.
+const MIX_BANDS = [['red', 'Red', 29, '#e0403a'], ['orange', 'Orange', 60, '#ec8a2c'], ['yellow', 'Yellow', 110, '#e4cf30'], ['green', 'Green', 142, '#44b04a'],
+  ['aqua', 'Aqua', 195, '#3cc4c8'], ['blue', 'Blue', 264, '#3c64e0'], ['purple', 'Purple', 300, '#9a4ad8'], ['magenta', 'Magenta', 328, '#d840b4']];
+const MIX_KEYS = MIX_BANDS.flatMap(([band]) => ['H', 'S', 'L'].map(k => band + k));
+
 const SLIDERS = [
   { key: 'temp', label: 'Temperature', group: 'White balance', min: -100, max: 100, step: 1 },
   { key: 'tint', label: 'Tint', min: -100, max: 100, step: 1 },
@@ -14,6 +20,8 @@ const SLIDERS = [
   { key: 'blacks', label: 'Blacks', min: -100, max: 100, step: 1 },
   { key: 'vibrance', label: 'Vibrance', group: 'Colour', min: -100, max: 100, step: 1 },
   { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1 },
+  ...MIX_BANDS.flatMap(([band, name], i) => ['Hue', 'Saturation', 'Luminance'].map((what, j) => ({
+    key: band + what[0], label: `${name} ${what.toLowerCase()}`, group: i + j ? undefined : 'Colour mixer', band, min: -100, max: 100, step: 1 }))),
   { key: 'lookAmount', label: 'Strength', group: 'Look', min: 0, max: 100, step: 1, default: 100, unit: '%' },
   { key: 'split', label: 'Amount', group: 'Split toning', min: 0, max: 100, step: 1 },
   { key: 'splitShadow', label: 'Shadow colour', min: 0, max: 359, step: 1, default: 220, unit: '°', hue: true },
@@ -26,7 +34,7 @@ const SLIDERS = [
   { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1 },
   { key: 'fade', label: 'Fade', min: 0, max: 100, step: 1 }
 ];
-const RECIPE_VERSION = 6;
+const RECIPE_VERSION = 7;
 const DETAIL_EDGE = 3072; // main.rs DEVELOP_EDGE: Develop's source is averaged down by the whole factor ceil(long side / this), which is also Detail's scale at full size
 const SETTINGS = [...SLIDERS.map(s => s.key), 'look']; // everything but retouch and crop: what copy, paste and presets carry
 
@@ -151,6 +159,8 @@ uniform float u_look, u_mono, u_lookContrast, u_lookSat, u_fade, u_grain, u_vign
 uniform vec3 u_filter, u_lift, u_gamma, u_gain;
 uniform float u_detailScale, u_sharpen, u_sharpenMask, u_nrColour, u_nrLuma;
 uniform vec2 u_toneLo, u_toneHi, u_splitLo, u_splitHi, u_grainScale;
+// Colour mixer: per band hue (-1..1 = -30..30 degrees), saturation and luminance (-1..1), band centres in OkLab degrees.
+uniform bool u_mix; uniform float u_mixH[8], u_mixS[8], u_mixL[8], u_mixAt[8];
 in vec2 v_uv, v_src; out vec4 color;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
@@ -300,6 +310,21 @@ void main() {
     lab.yz *= (1.0 + u_saturation) * (1.0 + u_vibrance * (1.0 - smoothstep(0.0, 0.25, chroma)) * skin);
     d = toSrgb(clamp(fromOklab(lab), 0.0, 1.0));
   }
+  if (u_mix) {
+    vec3 lab = oklab(toLinear(d));
+    float chroma = length(lab.yz), hue = degrees(atan(lab.z, lab.y));
+    if (hue < u_mixAt[0]) hue += 360.0;
+    // The two bands the hue lies between, blended smoothly, so neighbouring bands overlap with no hard edge.
+    int i = 7;
+    for (int k = 0; k < 7; k++) if (hue >= u_mixAt[k] && hue < u_mixAt[k + 1]) i = k;
+    int j = (i + 1) % 8;
+    float to = i == 7 ? u_mixAt[0] + 360.0 : u_mixAt[j], t = smoothstep(u_mixAt[i], to, hue);
+    float h = mix(u_mixH[i], u_mixH[j], t), s = mix(u_mixS[i], u_mixS[j], t), l = mix(u_mixL[i], u_mixL[j], t);
+    float a = radians(h * 30.0), colourful = smoothstep(0.0, 0.06, chroma); // greys have no hue, so they stay put
+    lab.yz = mat2(cos(a), sin(a), -sin(a), cos(a)) * lab.yz * (1.0 + s);
+    lab.x *= 1.0 + 0.4 * l * colourful;
+    d = toSrgb(clamp(fromOklab(lab), 0.0, 1.0));
+  }
   if (u_look > 0.0) {
     vec3 o = d;
     if (u_mono > 0.0) d = vec3(dot(d, u_filter));
@@ -397,6 +422,9 @@ class Developer {
     gl.uniform3fv(u('u_wb'), whiteBalance(r.temp, r.tint));
     gl.uniform1f(u('u_exposure'), 2 ** r.exposure);
     for (const key of ['contrast', 'highlights', 'shadows', 'whites', 'blacks', 'vibrance', 'saturation', 'vignette']) gl.uniform1f(u('u_' + key), r[key] / 100);
+    gl.uniform1i(u('u_mix'), MIX_KEYS.some(k => r[k]) ? 1 : 0);
+    for (const k of 'HSL') gl.uniform1fv(u('u_mix' + k), MIX_BANDS.map(([band]) => r[band + k] / 100));
+    gl.uniform1fv(u('u_mixAt'), MIX_BANDS.map(b => b[2]));
     const look = lookOf(r.look) || {}, amount = look.id ? r.lookAmount / 100 : 0;
     const tint = ([hue, amount] = [0, 0], k = 1) => [k * amount * Math.cos(hue * Math.PI / 180), k * amount * Math.sin(hue * Math.PI / 180)];
     gl.uniform1f(u('u_look'), amount);

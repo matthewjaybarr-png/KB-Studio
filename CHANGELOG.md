@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Develop has a Colour mixer: pick one of eight colours (red to magenta) and change its hue, saturation and brightness without touching the other colours or greys. "Reset colour mixer" clears it. Edits made with it need this version or newer to open.
+
 ## 1.0.0
 
 - Create now runs on KB Studio's own drawing engine instead of the Fabric.js library. Saved designs keep the same format, so existing designs open and save as before, and designs saved by this version still open in older ones.

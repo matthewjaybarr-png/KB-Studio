@@ -909,7 +909,8 @@ fn percent_decode(s: &str) -> Option<String> {
 /// app refuses a recipe it would show without its look. Version 4 added `crop` (absent means
 /// the whole photo, unrotated). Version 5 added Detail (sharpen, sharpenMask, nrColour, nrLuma;
 /// absent means their defaults). Version 6 added blur, dodge and burn brushes; no migration.
-const RECIPE_VERSION: u64 = 6;
+/// Version 7 added the colour mixer (redH, redS, redL ... magentaL; absent means 0).
+const RECIPE_VERSION: u64 = 7;
 
 fn recipe_path(dir: &str, id: &str) -> Result<PathBuf, String> {
     shoot_file(dir, id)?;
@@ -1752,7 +1753,7 @@ mod tests {
         let loaded = load_recipes(d.clone()).unwrap();
         assert_eq!(
             loaded["IMG_1"],
-            serde_json::json!({"version": 6, "exposure": 0.5, "temp": 12})
+            serde_json::json!({"version": 7, "exposure": 0.5, "temp": 12})
         );
         assert_eq!(
             fs::read(edited_path(&d, "IMG_1", true).unwrap()).unwrap(),
@@ -1809,7 +1810,7 @@ mod tests {
     }
 
     #[test]
-    fn older_recipes_load_and_save_as_version_6_and_7_is_refused() {
+    fn older_recipes_load_and_save_as_version_7_and_8_is_refused() {
         let dir = temp_dir("recipe-versions");
         let d = dir.display().to_string();
         fs::write(dir.join("IMG_1.JPG"), b"jpeg").unwrap();
@@ -1817,23 +1818,23 @@ mod tests {
         fs::write(&file, r#"{"version": 1, "exposure": 1}"#).unwrap();
         assert_eq!(
             load_recipes(d.clone()).unwrap()["IMG_1"],
-            serde_json::json!({"version": 6, "exposure": 1})
+            serde_json::json!({"version": 7, "exposure": 1})
         );
         fs::write(&file, r#"{"version": 3, "look": "sepia"}"#).unwrap();
         assert_eq!(
             load_recipes(d.clone()).unwrap()["IMG_1"],
-            serde_json::json!({"version": 6, "look": "sepia"}),
+            serde_json::json!({"version": 7, "look": "sepia"}),
             "a version 3 recipe loads uncropped"
         );
         let old = serde_json::json!({"version": 1, "exposure": 1});
         save_recipe(d.clone(), "IMG_1".into(), Some(old)).unwrap();
         let saved: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
-        assert_eq!(saved["version"], 6);
+        assert_eq!(saved["version"], 7);
         fs::write(&file, r#"{"version": 4, "exposure": 2}"#).unwrap();
-        assert_eq!(load_recipes(d.clone()).unwrap()["IMG_1"], serde_json::json!({"version": 6, "exposure": 2}), "a version 4 recipe loads with Detail at its defaults");
+        assert_eq!(load_recipes(d.clone()).unwrap()["IMG_1"], serde_json::json!({"version": 7, "exposure": 2}), "a version 4 recipe loads with Detail at its defaults");
         fs::write(&file, r#"{"version": 5, "sharpen": 40, "sharpenMask": 25, "nrColour": 10, "nrLuma": 15}"#).unwrap();
-        assert_eq!(load_recipes(d.clone()).unwrap()["IMG_1"], serde_json::json!({"version": 6, "sharpen": 40, "sharpenMask": 25, "nrColour": 10, "nrLuma": 15}), "a version 5 recipe keeps its Detail settings");
-        fs::write(&file, r#"{"version": 7, "retouch": []}"#).unwrap();
+        assert_eq!(load_recipes(d.clone()).unwrap()["IMG_1"], serde_json::json!({"version": 7, "sharpen": 40, "sharpenMask": 25, "nrColour": 10, "nrLuma": 15}), "a version 5 recipe keeps its Detail settings");
+        fs::write(&file, r#"{"version": 8, "retouch": []}"#).unwrap();
         assert!(load_recipes(d.clone()).unwrap_err().contains("newer KB Studio"));
         fs::remove_dir_all(dir).unwrap();
     }

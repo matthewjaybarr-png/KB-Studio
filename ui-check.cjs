@@ -354,6 +354,18 @@ const test = `<script>
     step(raw[0] > 90 && raw[0] < 160 && Math.abs(raw[0] - raw[2]) <= 1, 'RAW mid grey lands mid-tone and neutral (' + Array.from(raw.slice(0, 3)) + ')');
     step(raw[4] >= raw[5] && raw[5] >= raw[6] && raw[6] > 200, 'a RAW highlight above white rolls off without changing hue (' + Array.from(raw.slice(4, 7)) + ')');
     step(warm[0] > warm[2] && cool[2] > cool[0], 'temperature warms and cools');
+    // Colour mixer: a band moves its own colour only; greys and other bands stay; all zeros is the picture as before.
+    dev.setRaw(rawImage(5, 1, [0.6, 0.05, 0.05, 0.05, 0.08, 0.6, 0.2, 0.2, 0.2, 0.05, 0.5, 0.05, 0.9, 0.9, 0.9]), false);
+    const mixed = recipe => Array.from(dev.pixels(recipe, 5).data), plainMix = mixed({}), mixPx = (data, x) => data.slice(x * 4, x * 4 + 3);
+    const moved = (a, x) => Math.max(...mixPx(a, x).map((v, i) => Math.abs(v - mixPx(plainMix, x)[i])));
+    step(mixed(Object.fromEntries(MIX_KEYS.map(k => [k, 0]))).every((v, i) => v === plainMix[i]), 'an all-zero colour mixer is bit-identical');
+    for (const k of ['redH', 'redS', 'redL']) for (const v of [-100, 100]) {
+      const m = mixed({ [k]: v });
+      step(moved(m, 0) > 4 && [1, 2, 3, 4].every(x => moved(m, x) === 0), k + ' ' + v + ' moves red (by ' + moved(m, 0) + ') and leaves blue, greys and green alone');
+    }
+    const g = mixed({ greenL: -100 });
+    step(moved(g, 3) > 4 && [0, 1, 2, 4].every(x => moved(g, x) === 0), 'green luminance moves only green');
+    step(settingsOf({ redH: 20 }).redH === 20 && fullRecipe({}).magentaL === 0 && !isDefault(fullRecipe({ blueS: 5 })), 'mixer values copy with the settings, default to 0 and count as an edit');
     dev.setRaw(rawImage(16, 16, Array.from(want).filter((_, i) => i % 4 !== 3).map(lin)), false);
     const spreadOf = recipe => { let m = 0; for (let i = 0; i < 256; i++) { const p = at(out(recipe), i % 16, i >> 4); m = Math.max(m, Math.max(...p) - Math.min(...p)); } return m; };
     step(spreadOf({ look: 'bw' }) <= 2, 'the black & white look is grey (spread ' + spreadOf({ look: 'bw' }) + ')');
@@ -445,7 +457,7 @@ const test = `<script>
     await until(() => editing?.ready && !sliders.disabled, 'D develops the photo');
     step(!develop.classList.contains('hidden') && grid.classList.contains('hidden') && calls.at(-1).command === 'develop_source' && calls.at(-1).args.name === 'IMG_0001.CR2', 'a RAW+JPEG pair develops from its RAW');
     slide('exposure', 1);
-    await until(() => savedRecipe('IMG_0001')?.exposure === 1 && savedRecipe('IMG_0001').version === 6, 'a slider change saves the recipe');
+    await until(() => savedRecipe('IMG_0001')?.exposure === 1 && savedRecipe('IMG_0001').version === RECIPE_VERSION, 'a slider change saves the recipe');
     step($('#develop-caption').textContent.includes('Edited') && sliders.querySelector('[data-key="exposure"]').previousElementSibling.textContent === '+1.00', 'caption says Edited; the slider shows its value');
     ctrl('z');
     await until(() => !savedRecipe('IMG_0001') && sliders.querySelector('[data-key="exposure"]').value === '0', 'Ctrl+Z undoes back to the camera file');
@@ -455,6 +467,13 @@ const test = `<script>
     await until(() => savedRecipe('IMG_0001')?.contrast === 0 || savedRecipe('IMG_0001')?.contrast === undefined, 'double-clicking a slider resets it');
     ctrl('z');
     await until(() => savedRecipe('IMG_0001')?.contrast === 30, 'and that reset can be undone');
+    $('#sliders .bands [data-band=green]').click();
+    step(!sliders.querySelector('[data-key=greenS]').closest('label').hidden && sliders.querySelector('[data-key=redS]').closest('label').hidden, 'a colour mixer band shows its own three sliders');
+    slide('greenS', 40);
+    await until(() => savedRecipe('IMG_0001')?.greenS === 40 && $('#sliders .bands [data-band=green]').classList.contains('moved') && !$('#mix-reset').disabled, 'a colour mixer slider saves with the photo and marks its band');
+    $('#mix-reset').click();
+    await until(() => !savedRecipe('IMG_0001')?.greenS && $('#mix-reset').disabled && savedRecipe('IMG_0001')?.contrast === 30, 'Reset colour mixer clears only the bands');
+    slide('greenS', 40);
     press('\\\\');
     step($('#develop-caption').textContent.includes('Before'), 'holding the backslash key shows before');
     document.dispatchEvent(new KeyboardEvent('keyup', { key: '\\\\', bubbles: true }));
@@ -475,10 +494,10 @@ const test = `<script>
     slide('saturation', -100); press('Escape');
     await until(() => disk[dir + '/edited/IMG_0004.thumb'] && thumbs.get('IMG_0004') !== camera, 'its grid thumbnail becomes the edited look');
     await openShoot(dir);
-    step(recipes.IMG_0001?.exposure === 1 && recipes.IMG_0001.contrast === 30 && grid.children[1].textContent.includes('Edited'), 'recipes survive reopening the shoot');
+    step(recipes.IMG_0001?.exposure === 1 && recipes.IMG_0001.contrast === 30 && recipes.IMG_0001.greenS === 40 && grid.children[1].textContent.includes('Edited'), 'recipes survive reopening the shoot');
     await until(() => calls.some(c => c.command === 'edited' && c.args.id === 'IMG_0001' && c.args.thumb) && loading === 0 && !wanted.length, 'reopened grid uses edited thumbnails');
     move(1); press('d');
-    await until(() => editing?.ready && sliders.querySelector('[data-key="contrast"]').value === '30', 'the sliders show the saved recipe');
+    await until(() => editing?.ready && sliders.querySelector('[data-key="contrast"]').value === '30' && sliders.querySelector('[data-key="greenS"]').value === '40', 'the sliders show the saved recipe, colour mixer too');
     $('#reset').click();
     await until(() => !savedRecipe('IMG_0001') && !disk[dir + '/edited/IMG_0001'] && !grid.children[1].textContent.includes('Edited'), 'Reset all goes back to the camera file');
 
@@ -487,7 +506,7 @@ const test = `<script>
     const strength = sliders.querySelector('[data-key="lookAmount"]');
     step(strength.disabled && $('#look').querySelectorAll('optgroup').length === 3 && $('#look').options.length === LOOKS.length + 1, 'every look is in the list; strength is off without one');
     choose('#look', 'sepia');
-    await until(() => savedRecipe('IMG_0001')?.look === 'sepia' && savedRecipe('IMG_0001').version === 6, 'choosing a look saves it');
+    await until(() => savedRecipe('IMG_0001')?.look === 'sepia' && savedRecipe('IMG_0001').version === RECIPE_VERSION, 'choosing a look saves it');
     step(!strength.disabled && strength.previousElementSibling.textContent === '100%', 'its strength slider turns on at 100%');
     slide('lookAmount', 40); slide('grain', 20);
     await until(() => savedRecipe('IMG_0001')?.lookAmount === 40 && savedRecipe('IMG_0001').grain === 20, 'strength and grain save on top of the look');
@@ -546,7 +565,7 @@ const test = `<script>
     step(saved.tool === 'spot' && nearAll(saved.points, spotPath.map(p => fitted(...p))) && saved.size === 0.01 && near(saved.offset, [0.05, 0]) && saved.strength === undefined, 'at fit, the stroke is saved at the photo points it covered, with the source Rust picked (' + JSON.stringify(saved) + ')');
     step(calls.some(c => c.command === 'spot_source' && c.args.name === 'IMG_0013.CR2' && near(c.args.stroke.points[0], saved.points[0])), 'spot heal asks Rust for its source');
     await until(() => calls.some(c => c.command === 'retouch' && c.args.strokes.length === 1 && c.args.name === 'IMG_0013.CR2'), 'and Rust applies the stroke');
-    step(savedRecipe('IMG_0013').version === 6 && $('#develop-caption').textContent.includes('Edited'), 'a retouch alone makes the photo Edited');
+    step(savedRecipe('IMG_0013').version === RECIPE_VERSION && $('#develop-caption').textContent.includes('Edited'), 'a retouch alone makes the photo Edited');
 
     press(']');
     step(Math.abs(brush.size - 0.0125) < 1e-9 && sliders.querySelector('[data-brush="size"]').previousElementSibling.textContent === '20 px', '] makes the brush bigger');
@@ -727,7 +746,7 @@ const test = `<script>
     const applied = cropping.crop;
     press('Enter');
     await until(() => sameCrop(crop(), applied), 'Enter applies the crop and saves it');
-    step(!cropping && developer.view.zoom === null && sameCrop(developer.crop, applied) && savedRecipe('IMG_0013').version === 6 && strokes().length === 2, 'the view shows the cropped picture; the strokes are kept');
+    step(!cropping && developer.view.zoom === null && sameCrop(developer.crop, applied) && savedRecipe('IMG_0013').version === RECIPE_VERSION && strokes().length === 2, 'the view shows the cropped picture; the strokes are kept');
     const [px0, py0] = developer.fromImage([0.6, 0.4]);
     step(close(developer.toImage(box.left + px0, box.top + py0), [0.6, 0.4], 1e-6), 'screen and photo points still match through the crop');
     ctrl('z');
