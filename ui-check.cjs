@@ -3281,6 +3281,17 @@ const test = `<script>
         fillNamesOnPage([['Name'], ['Cara']]);
         step(nameSlots()[0].text === 'Cara' && nameSlots()[1].text === '', 'a shorter list leaves no names from before');
         step(/^Put in 17 names; 3 more didn't fit/.test(fillNamesOnPage([['Name'], ...Array.from({ length: 20 }, (_, i) => ['Child ' + i])])), 'names that do not fit are counted');
+        // Classroom games (games.js). Bingo: every card different, nothing twice on a card, the middle of a 5 × 5 free.
+        const bc = bingoCards(bingoPool('capitals'), 5, 30, seededRandom(4));
+        step(bc.length === 30 && new Set(bc.map(c => c.map(x => x?.text).join())).size === 30 && bc.every(c => c.length === 25 && c[12] === null && new Set(c).size === 25), 'bingo: 30 different 5 × 5 cards with a free middle');
+        step(bingoCards(bingoPool('n20'), 5, 6, seededRandom(1)) === null && bingoPool('words', 'cat\\nCat\\n\\n dog \\nsun').length === 3, 'bingo: too few squares is refused, and repeated words count once');
+        await made('#sheet-bingo', () => { step(shownRow('#sheet-bingo-size') && !shownRow('#sheet-key') && $('#sheet-words-part').hidden, 'bingo asks what, squares and cards'); $('#sheet-bingo-count').value = '6'; },
+          pages => pages.length === 8 && pages[0].objects.filter(o => o.kbName === 'Square').length === 9 && pages[0].objects.filter(o => /^image$/i.test(o.type)).length === 9 && JSON.stringify(pages[0].objects) !== JSON.stringify(pages[1].objects) && pages[6].objects.filter(o => o.kbName === 'Line to cut').length === 30, 'Bingo');
+        $('#sheet-bingo').click(); $('#sheet-bingo-what').value = 'words'; $('#sheet-bingo-what').onchange(); $('#sheet-words').value = 'cat\\ndog'; $('#sheet-make').click();
+        await until(() => /needs at least 9 different words, and there are 2/.test($('#sheet-note').textContent), () => 'bingo says how many words it needs: ' + $('#sheet-note').textContent);
+        step(!$('#sheet-words-part').hidden && $('#sheet-dialog').open, 'bingo with my own words shows the word box'); $('#sheet-close').click();
+        await made('#sheet-bingo', () => { $('#sheet-bingo-what').value = 'words'; $('#sheet-bingo-what').onchange(); $('#sheet-bingo-size').value = '5'; $('#sheet-bingo-count').value = '6'; $('#sheet-words').value = Array.from({ length: 26 }, (_, i) => 'word ' + i).join('\\n') + '\\nextraordinarily long'; },
+          pages => pages.length === 7 && pages[0].objects.filter(o => o.kbName === 'Free square').length === 1 && pages[0].objects.filter(o => o.kbName === 'Square words').length === 25 && pages[6].objects.filter(o => o.kbName === 'Line to cut').length === 27, 'Bingo words');
         $('#sheet-math').click(); step(!shownRow('#sheet-maze-size') && !shownRow('#sheet-count-upto') && shownRow('#sheet-key'), 'Math practice hides the preschool choices'); $('#sheet-close').click();
       }
       $('#sheet-key').checked = true;

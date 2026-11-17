@@ -115,6 +115,9 @@
       <label data-kinds="checklist">Check <select id="sheet-check-kind"><option value="letters">Letters: capitals and small</option><option value="sounds">Letter sounds</option><option value="numbers">Numbers, shapes and colours</option></select></label>
       <label data-kinds="maze">How big <select id="sheet-maze-size"><option value="easy">Easy: 5 × 5</option><option value="medium" selected>Medium: 8 × 8</option><option value="hard">Hard: 12 × 12</option></select></label>
       <label data-kinds="maze">Who's going where <select id="sheet-maze-pair"><option value="rabbit">Bunny to the carrot</option><option value="bee">Bee to the flower</option><option value="mouse">Mouse to the cheese</option><option value="dog">Dog to the bone</option><option value="monkey">Monkey to the banana</option><option value="chick">Chick to the corn</option></select></label>
+      <label data-kinds="bingo">Bingo with <select id="sheet-bingo-what"><option value="pictures">Pictures</option><option value="capitals">Capital letters</option><option value="small">Small letters</option><option value="n20">Numbers 1 to 20</option><option value="n50">Numbers 1 to 50</option><option value="words">My own words</option></select></label>
+      <label data-kinds="bingo">Squares <select id="sheet-bingo-size"><option value="3">3 × 3 (for little ones)</option><option value="4">4 × 4</option><option value="5">5 × 5 with a free square</option></select></label>
+      <label data-kinds="bingo">Cards <select id="sheet-bingo-count"><option>6</option><option>10</option><option>15</option><option selected>20</option><option>25</option><option>30</option></select></label>
     </div>
     <label id="sheet-key-row" class="check"><input id="sheet-key" type="checkbox" checked> Answer key on page 2</label>
     <p id="sheet-note" role="status"></p>
@@ -318,6 +321,10 @@
             <button id="sheet-pattern-pics" type="button">🧩 What comes next?</button>
             <button id="sheet-dots" type="button">⭐ Dot-to-dot</button>
             <button id="sheet-maze" type="button">🐰 Maze</button>
+          </div>
+          <h4 class="sheet-group">Games</h4>
+          <div class="sheet-buttons">
+            <button id="sheet-bingo" type="button">🎲 Bingo (a card for each child)</button>
           </div>
           <h4 class="sheet-group">Checking progress</h4>
           <div class="sheet-buttons">
@@ -722,6 +729,7 @@
   <script src="preschool.js"></script>
   <script src="prestarters.js"></script>
   <script src="posters.js"></script>
+  <script src="games.js"></script>
   <script src="checklists.js"></script>
   <script src="photolayouts.js"></script>
   <script src="bulk.js"></script>
