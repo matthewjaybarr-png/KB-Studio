@@ -115,6 +115,9 @@
       <label data-kinds="checklist">Check <select id="sheet-check-kind"><option value="letters">Letters: capitals and small</option><option value="sounds">Letter sounds</option><option value="numbers">Numbers, shapes and colours</option></select></label>
       <label data-kinds="maze">How big <select id="sheet-maze-size"><option value="easy">Easy: 5 × 5</option><option value="medium" selected>Medium: 8 × 8</option><option value="hard">Hard: 12 × 12</option></select></label>
       <label data-kinds="maze">Who's going where <select id="sheet-maze-pair"><option value="rabbit">Bunny to the carrot</option><option value="bee">Bee to the flower</option><option value="mouse">Mouse to the cheese</option><option value="dog">Dog to the bone</option><option value="monkey">Monkey to the banana</option><option value="chick">Chick to the corn</option></select></label>
+      <label data-kinds="seating">Desks in <select id="sheet-seat-layout"><option value="rows">Rows</option><option value="groups4">Groups of four</option><option value="groups6">Groups of six</option><option value="horseshoe">A horseshoe</option><option value="circle">A circle (carpet time)</option></select></label>
+      <label data-kinds="seating">Seat them <select id="sheet-seat-order"><option value="list">In the order of the list</option><option value="mixed">Mixed up (a new mix each time)</option></select></label>
+      <label data-kinds="seating" class="check"><input id="sheet-seat-first" type="checkbox" checked> First names only (bigger letters)</label>
       <label data-kinds="bingo">Bingo with <select id="sheet-bingo-what"><option value="pictures">Pictures</option><option value="capitals">Capital letters</option><option value="small">Small letters</option><option value="n20">Numbers 1 to 20</option><option value="n50">Numbers 1 to 50</option><option value="words">My own words</option></select></label>
       <label data-kinds="bingo">Squares <select id="sheet-bingo-size"><option value="3">3 × 3 (for little ones)</option><option value="4">4 × 4</option><option value="5">5 × 5 with a free square</option></select></label>
       <label data-kinds="bingo">Cards <select id="sheet-bingo-count"><option>6</option><option>10</option><option>15</option><option selected>20</option><option>25</option><option>30</option></select></label>
@@ -325,6 +328,10 @@
           <h4 class="sheet-group">Games</h4>
           <div class="sheet-buttons">
             <button id="sheet-bingo" type="button">🎲 Bingo (a card for each child)</button>
+          </div>
+          <h4 class="sheet-group">My class</h4>
+          <div class="sheet-buttons">
+            <button id="sheet-seating" type="button">🪑 Seating plan</button>
           </div>
           <h4 class="sheet-group">Checking progress</h4>
           <div class="sheet-buttons">

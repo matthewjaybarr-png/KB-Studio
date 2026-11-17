@@ -1,18 +1,23 @@
-// Classroom games, in Classroom's Puzzles and worksheets: bingo cards (a different one for each child, with calling
-// cards to cut apart). They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
+// Classroom games and plans, in Classroom's Puzzles and worksheets: bingo cards (a different one for each child, with
+// calling cards to cut apart) and a seating plan from a class list. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
 // Needs create.js, worksheets.js, preschool.js and posters.js.
 
 const plainLabel = name => picLabel(name).replace(/ \(.*\)$/, '');
+// Words as big as fit a box, centred in it: no word wider than the box (a text box grows to fit its longest word),
+// none broken over two lines, and the lines no taller than the box.
+function fitText(text, x, y, w, h, o = {}) {
+  const words = text.split(/\s+/).length;
+  let size = o.fontSize || h * 0.56;
+  const t = T(text, x, y, { width: w, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: '#3a3a3a', kbName: 'Square words', ...o, fontSize: size });
+  while ((t.width > w || t.textLines.length > words || t.height > h) && size > 8) { size *= 0.92; t.set({ fontSize: size, width: w }); t.initDimensions(); }
+  t.set({ left: x + (w - t.width) / 2, top: y + (h - t.height) / 2 });
+  return t;
+}
 // One thing in a square `s` wide at (x, y): a picture (with its word under it if `label`), or words as big as fit.
 async function squareItem(item, x, y, s, label) {
   if (item.pic && !label) return [await pic(item.pic, x + s / 2, y + s / 2, s * 0.76)];
-  const words = item.text.split(/\s+/).length, room = item.pic ? s * 0.26 : s;
-  let size = item.pic ? s * 0.15 : s * 0.56;
-  const t = T(item.text, x + 4, y, { width: s - 8, fontSize: size, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: '#3a3a3a', kbName: 'Square words' });
-  // No word wider than the square (a text box grows to fit its longest word), and the lines no taller than their room.
-  while ((t.width > s - 8 || t.textLines.length > words || t.height > room) && size > 8) { size *= 0.92; t.set({ fontSize: size, width: s - 8 }); t.initDimensions(); }
-  t.set('top', item.pic ? y + s * 0.72 + (room - t.height) / 2 : y + (s - t.height) / 2);
-  return item.pic ? [await pic(item.pic, x + s / 2, y + s * 0.4, s * 0.58), t] : [t];
+  if (!item.pic) return [fitText(item.text, x + 4, y, s - 8, s)];
+  return [await pic(item.pic, x + s / 2, y + s * 0.4, s * 0.58), fitText(item.text, x + 4, y + s * 0.72, s - 8, s * 0.26, { fontSize: s * 0.15 })];
 }
 
 // ---- Bingo ----
@@ -66,6 +71,41 @@ async function callingPages(pool) {
   return pages;
 }
 
+// ---- Seating plan: a desk for each name, in rows, groups, a horseshoe or a circle, facing the front ----
+// "Smith, Ava" turns round; `first` keeps only the first name. Forty names at most.
+const seatNames = (words, first) => words.split(/\r?\n/).map(w => w.trim().replace(/\s+/g, ' ').replace(/^([^,]+),\s*(.+)$/, '$2 $1')).filter(Boolean).map(n => first ? n.split(' ')[0] : n).slice(0, 40);
+// Where each of `n` desks goes inside a 720 × 770 area: [x, y, w, h, group], group picking its colour.
+function seatSpots(n, layout) {
+  const W = 720, H = 770, spots = [];
+  if (layout === 'circle') {
+    const w = Math.min(130, 2000 / n - 8), h = Math.min(60, Math.max(30, w * 0.6)); // narrower than the gap between neighbours at the top
+    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + 2 * Math.PI * i / n; spots.push([W / 2 + Math.cos(a) * (W / 2 - w / 2) - w / 2, H / 2 + Math.sin(a) * (H / 2 - h / 2) - h / 2, w, h, 0]); }
+  } else if (layout === 'horseshoe') {
+    const side = Math.round(n / 3), across = n - 2 * side, px = W / Math.max(across, 3), py = Math.min(110, H / (side + 1)), w = Math.min(px - 10, 150), h = Math.min(py - 10, 80);
+    for (let i = 0; i < side; i++) spots.push([0, i * py, w, h, 0]);
+    for (let i = 0; i < across; i++) spots.push([i * px + (px - 10 - w) / 2, side * py, w, h, 0]);
+    for (let i = side - 1; i >= 0; i--) spots.push([W - w, i * py, w, h, 0]);
+  } else if (layout === 'rows') {
+    const cols = Math.min(6, Math.max(3, Math.ceil(Math.sqrt(n * 0.9)))), rows = Math.ceil(n / cols), px = W / cols, py = Math.min(120, H / rows);
+    for (let i = 0; i < n; i++) spots.push([(i % cols) * px + 8, Math.floor(i / cols) * py, px - 16, Math.min(py - 16, 84), 0]);
+  } else { // groups of four (2 × 2 desks) or six (3 × 2), tables two or three across
+    const per = layout === 'groups6' ? 6 : 4, across = per / 2, tables = Math.ceil(n / per), tcols = per === 4 && tables > 4 ? 3 : 2, trows = Math.ceil(tables / tcols);
+    const px = W / tcols, py = Math.min(250, H / trows), w = (px - 36) / across, h = Math.min(84, (py - 36) / 2);
+    for (let i = 0; i < n; i++) { const t = Math.floor(i / per), k = i % per; spots.push([(t % tcols) * px + 18 + (k % across) * w, Math.floor(t / tcols) * py + Math.floor(k / across) * h, w, h, t]); }
+  }
+  return spots;
+}
+// Each desk is its box and name grouped, so it drags as one thing.
+function seatingPage(title, names, layout) {
+  const parts = [T(title, 48, 36, { width: 720, fontSize: 44, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', kbName: 'Title' }),
+    new kbe.Group([R(208, 112, 400, 44, { rx: 10, ry: 10, fill: '#3a3a3a', stroke: '#3a3a3a', kbName: 'Board' }), fitText('Front of the room', 218, 112, 380, 44, { fontSize: 22, fill: '#ffffff', fontWeight: 'normal' })], { kbName: 'Front of the room' })];
+  for (const [i, [x, y, w, h, group]] of seatSpots(names.length, layout).entries()) {
+    const [fill, edge] = CARD_COLOURS[group % CARD_COLOURS.length];
+    parts.push(new kbe.Group([R(48 + x, 200 + y, w, h, { rx: 8, ry: 8, fill, stroke: edge, strokeWidth: 2.5, kbName: 'Desk' }), fitText(names[i], 48 + x + 5, 200 + y + 3, w - 10, h - 6, { fontSize: Math.min(24, h * 0.42), kbName: 'Name' })], { kbName: 'Desk: ' + names[i] }));
+  }
+  return toPage(parts);
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
@@ -76,8 +116,16 @@ Object.assign(SHEET_KINDS, {
       for (const [n, cells] of cards.entries()) pages.push(await bingoPage(title, cells, size, n));
       pages.push(...await callingPages(pool));
       return { pages, note: `${cards.length} cards, each one different, then the calling cards to cut apart.` + (pool.length === need ? ' Every card has the same squares in a different order, so everyone finishes together: add more words for a real race.' : '') };
+    } },
+  seating: { title: 'Seating plan', words: true, key: false, wordsLabel: 'Their names', hint: 'One name per line, up to 40. Pick your class list above to fill it in.', placeholder: 'Ava\nBen\nCharlie',
+    async make(title, key, seed, words) {
+      let names = seatNames(words, $('#sheet-seat-first').checked);
+      if (names.length < 2) return { error: 'Type their names first, one per line, or pick your class list.' };
+      if ($('#sheet-seat-order').value === 'mixed') names = shuffled(names, seededRandom(seed));
+      return { pages: [seatingPage(title, names, $('#sheet-seat-layout').value)], note: `${names.length} desks. Drag a desk to move it; Ungroup it to change the name.` };
     } }
 });
 const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; };
 $('#sheet-bingo-what').onchange = bingoWords;
 $('#sheet-bingo').onclick = () => { openSheet('bingo'); bingoWords(); };
+$('#sheet-seating').onclick = () => openSheet('seating');
