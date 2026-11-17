@@ -3306,6 +3306,15 @@ const test = `<script>
           pages => pages.length === 2 && pages[0].objects.filter(o => o.kbName === 'Clock').length === 6 && pages[0].objects.filter(o => o.kbName === 'Hour hand').length === 6 && pages[0].objects.filter(o => o.kbName === 'Time' && /_/.test(o.text)).length === 6 && pages[1].objects.filter(o => o.kbName === 'Answer' && /^\\d+:\\d\\d$/.test(o.text)).length === 6, 'Telling the time');
         await made('#sheet-clock', () => { $('#sheet-clock-mode').value = 'draw'; $('#sheet-clock-level').value = 'five'; },
           pages => pages.length === 2 && pages[0].objects.every(o => o.kbName !== 'Hour hand') && pages[0].objects.filter(o => o.kbName === 'Time' && /^\\d+:\\d\\d$/.test(o.text)).length === 6 && pages[1].objects.filter(o => o.kbName === 'Minute hand').length === 6, 'Draw the hands');
+        // Memory game: every pair goes together, no pair twice, and dots stay inside their square.
+        const mp = what => memoryPairs(what, 12, seededRandom(6));
+        step(mp('same').every(([a, b]) => a.pic === b.pic) && new Set(mp('same').map(p => p[0].pic)).size === 12 && mp('letters').every(([a, b]) => a.text.toLowerCase() === b.text && a.text !== b.text) && mp('numbers').every(([a, b], i) => +a.text === i + 1 && b.dots === i + 1) && mp('words').every(([a, b]) => a.pic && b.text && !b.pic), 'memory pairs go together');
+        step([1, 2, 5, 7, 9, 12].every(n => { const d = dotParts(n, 0, 0, 100, '#000'); return d.length === n && d.every(c => c.left >= -0.5 && c.top >= -0.5 && c.left + c.radius * 2 <= 100.5 && c.top + c.radius * 2 <= 100.5); }), 'memory dots fit their card');
+        await made('#sheet-memory', () => { step(shownRow('#sheet-memory-what') && !shownRow('#sheet-key') && !shownRow('#sheet-bingo-size'), 'memory asks what the pairs are'); },
+          pages => pages.length === 1 && pages[0].objects.filter(o => o.kbName === 'Line to cut').length === 12 && pages[0].objects.filter(o => /^image$/i.test(o.type)).length === 12, 'Memory game');
+        await made('#sheet-memory', () => { $('#sheet-memory-what').value = 'numbers'; $('#sheet-memory-pairs').value = '9'; },
+          pages => pages.length === 2 && pages[1].objects.filter(o => o.kbName === 'Card').length === 6 && pages[0].objects.filter(o => o.kbName === 'Dot').length === 21, 'Memory numbers');
+        await made('#sheet-memory', () => { $('#sheet-memory-what').value = 'words'; $('#sheet-memory-pairs').value = '6'; }, pages => pages.length === 1 && pages[0].objects.filter(o => o.kbName === 'Square words').length === 6, 'Memory words');
         $('#sheet-math').click(); step(!shownRow('#sheet-maze-size') && !shownRow('#sheet-count-upto') && shownRow('#sheet-key'), 'Math practice hides the preschool choices'); $('#sheet-close').click();
       }
       $('#sheet-key').checked = true;

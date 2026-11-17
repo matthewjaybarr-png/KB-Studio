@@ -1,5 +1,5 @@
 // Classroom games and plans, in Classroom's Puzzles and worksheets: bingo cards (a different one for each child, with
-// calling cards to cut apart), a seating plan from a class list and telling the time. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
+// calling cards to cut apart), memory game cards, a seating plan from a class list and telling the time. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
 // Needs create.js, worksheets.js, preschool.js and posters.js.
 
 const plainLabel = name => picLabel(name).replace(/ \(.*\)$/, '');
@@ -13,10 +13,11 @@ function fitText(text, x, y, w, h, o = {}) {
   t.set({ left: x + (w - t.width) / 2, top: y + (h - t.height) / 2 });
   return t;
 }
-// One thing in a square `s` wide at (x, y): a picture (with its word under it if `label`), or words as big as fit.
+// One thing in a square `s` wide at (x, y): a picture (with its word under it if `label`), or words as big as fit
+// (`item.size` caps them, as a share of the square).
 async function squareItem(item, x, y, s, label) {
   if (item.pic && !label) return [await pic(item.pic, x + s / 2, y + s / 2, s * 0.76)];
-  if (!item.pic) return [fitText(item.text, x + 4, y, s - 8, s)];
+  if (!item.pic) return [fitText(item.text, x + 4, y, s - 8, s, item.size ? { fontSize: s * item.size } : {})];
   return [await pic(item.pic, x + s / 2, y + s * 0.4, s * 0.58), fitText(item.text, x + 4, y + s * 0.72, s - 8, s * 0.26, { fontSize: s * 0.15 })];
 }
 
@@ -142,6 +143,35 @@ function clockPage(title, times, mode, answers) {
   return toPage(parts);
 }
 
+// ---- Memory game: pairs of cards to cut apart, twelve to a page ----
+// `pairs` pairs of card faces: the same picture twice, a big and a small letter, a number and that many dots, or a
+// picture and its word.
+function memoryPairs(what, pairs, rand) {
+  if (what === 'numbers') return Array.from({ length: pairs }, (_, i) => [{ text: String(i + 1) }, { dots: i + 1 }]);
+  if (what === 'letters') return shuffled(Object.keys(LETTER_PICS), rand).slice(0, pairs).sort().map(l => [{ text: l }, { text: l.toLowerCase() }]);
+  return shuffled(BINGO_PICS, rand).slice(0, pairs).map(p => [{ pic: p }, what === 'words' ? { text: plainLabel(p), size: 0.24 } : { pic: p }]);
+}
+// `n` dots (12 at most) in rows, centred in a square.
+function dotParts(n, x, y, s, colour) {
+  const cols = n <= 3 ? n : n <= 8 ? Math.ceil(n / 2) : 4, rows = Math.ceil(n / cols), pitch = Math.min(s / cols, s / rows, s / 3), r = pitch * 0.36;
+  return Array.from({ length: n }, (_, i) => { const row = Math.floor(i / cols), inRow = Math.min(cols, n - row * cols); return new kbe.Circle({ left: x + s / 2 + (i % cols - (inRow - 1) / 2) * pitch - r, top: y + s / 2 + (row - (rows - 1) / 2) * pitch - r, radius: r, fill: colour, stroke: colour, strokeWidth: 0, kbName: 'Dot' }); });
+}
+async function memoryPages(title, pairs) {
+  const cards = pairs.flatMap((pair, i) => pair.map(face => [face, i])), pages = [], w = 240, h = 228;
+  for (let first = 0; first < cards.length; first += 12) {
+    const parts = [T(title, 48, 28, { width: 720, fontSize: 36, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', kbName: 'Title' }),
+      T('Cut the cards apart, turn them face down and find the pairs.', 48, 78, { width: 720, fontSize: 18, textAlign: 'center', fill: '#666666', kbName: 'Instructions' })];
+    for (const [j, [face, pair]] of cards.slice(first, first + 12).entries()) {
+      const x = 48 + (j % 3) * w, y = 116 + Math.floor(j / 3) * h, [fill, edge] = CARD_COLOURS[pair % CARD_COLOURS.length], s = h - 56;
+      parts.push(R(x, y, w, h, { stroke: '#999999', strokeWidth: 1.5, strokeDashArray: [8, 6], kbName: 'Line to cut' }),
+        R(x + 14, y + 14, w - 28, h - 28, { rx: 16, ry: 16, fill, stroke: edge, strokeWidth: 3, kbName: 'Card' }),
+        ...(face.dots ? dotParts(face.dots, x + (w - s) / 2, y + 28, s, edge) : await squareItem(face, x + (w - s) / 2, y + 28, s, false)));
+    }
+    pages.push(toPage(parts));
+  }
+  return pages;
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
@@ -164,6 +194,11 @@ Object.assign(SHEET_KINDS, {
     async make(title, key, seed) {
       const times = clockTimes($('#sheet-clock-level').value, seededRandom(seed)), mode = $('#sheet-clock-mode').value;
       return { pages: [clockPage(title, times, mode, false), ...(key ? [clockPage(title, times, mode, true)] : [])] };
+    } },
+  memory: { title: 'Memory game', words: false, key: false,
+    async make(title, key, seed) {
+      const pairs = memoryPairs($('#sheet-memory-what').value, +$('#sheet-memory-pairs').value, seededRandom(seed));
+      return { pages: await memoryPages(title, pairs), note: `${pairs.length} pairs to cut apart. Print on card so the pictures don't show through.` };
     } }
 });
 const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; };
@@ -171,3 +206,4 @@ $('#sheet-bingo-what').onchange = bingoWords;
 $('#sheet-bingo').onclick = () => { openSheet('bingo'); bingoWords(); };
 $('#sheet-seating').onclick = () => openSheet('seating');
 $('#sheet-clock').onclick = () => openSheet('clock');
+$('#sheet-memory').onclick = () => openSheet('memory');

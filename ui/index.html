@@ -120,6 +120,8 @@
       <label data-kinds="seating" class="check"><input id="sheet-seat-first" type="checkbox" checked> First names only (bigger letters)</label>
       <label data-kinds="clock">Times <select id="sheet-clock-level"><option value="hour">O'clock only (3:00)</option><option value="half" selected>O'clock and half past (3:30)</option><option value="quarter">Quarter hours too (3:15, 3:45)</option><option value="five">Every five minutes (3:25)</option></select></label>
       <label data-kinds="clock">They <select id="sheet-clock-mode"><option value="read">Write the time under each clock</option><option value="draw">Draw the hands on each clock</option></select></label>
+      <label data-kinds="memory">Pairs of <select id="sheet-memory-what"><option value="same">The same picture twice</option><option value="words">A picture and its word</option><option value="letters">A big letter and its small letter</option><option value="numbers">A number and that many dots</option></select></label>
+      <label data-kinds="memory">How many pairs <select id="sheet-memory-pairs"><option value="6">6 (one page)</option><option value="9">9</option><option value="12">12 (two pages)</option></select></label>
       <label data-kinds="bingo">Bingo with <select id="sheet-bingo-what"><option value="pictures">Pictures</option><option value="capitals">Capital letters</option><option value="small">Small letters</option><option value="n20">Numbers 1 to 20</option><option value="n50">Numbers 1 to 50</option><option value="words">My own words</option></select></label>
       <label data-kinds="bingo">Squares <select id="sheet-bingo-size"><option value="3">3 × 3 (for little ones)</option><option value="4">4 × 4</option><option value="5">5 × 5 with a free square</option></select></label>
       <label data-kinds="bingo">Cards <select id="sheet-bingo-count"><option>6</option><option>10</option><option>15</option><option selected>20</option><option>25</option><option>30</option></select></label>
@@ -331,6 +333,7 @@
           <h4 class="sheet-group">Games</h4>
           <div class="sheet-buttons">
             <button id="sheet-bingo" type="button">🎲 Bingo (a card for each child)</button>
+            <button id="sheet-memory" type="button">🃏 Memory game (find the pairs)</button>
           </div>
           <h4 class="sheet-group">My class</h4>
           <div class="sheet-buttons">
