@@ -127,7 +127,7 @@ function movePageTo(from, to) {
   const editing = designPages[pageAt], [page] = designPages.splice(from, 1);
   designPages.splice(to, 0, page);
   pageAt = designPages.indexOf(editing);
-  commitDesign(); paintPages(); paintPageGrid();
+  renumberPages(); commitDesign(); paintPages(); paintPageGrid();
 }
 function openPageGrid() { if (!design || !pageReady()) return; closeMenus(); $('#page-grid').hidden = false; paintPageGrid(); }
 function closePageGrid() { $('#page-grid').hidden = true; }

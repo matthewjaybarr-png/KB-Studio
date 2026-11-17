@@ -2008,6 +2008,25 @@ const test = `<script>
     await until(() => designPages.length === 2 && pageAt === 1, 'Delete page removes it');
     $('#create-undo').click();
     await until(() => designPages.length === 3 && !restoring, 'undo brings a deleted page back');
+    // Page numbers: one at the foot of each page, kept in order when pages move or go, and taken away again.
+    const nums = () => allPages().map(p => p.objects.filter(o => o.kbPageNo).map(o => o.text).join()).join('|');
+    step(nums() === '||' && $('#page-numbers').textContent === '# Add page numbers', 'pages start without numbers');
+    $('#page-numbers').click();
+    await until(() => nums() === '1|2|3' && !restoring, () => 'Page numbers numbers every page: ' + nums());
+    step(allPages()[0].objects.find(o => o.kbPageNo).top > pagePx()[1] / 2 && $('#page-numbers').textContent === '# Remove page numbers', 'at the foot of the page, and the button now takes them away');
+    $('#page-list').children[0].click();
+    await until(() => pageAt === 0 && !restoring, 'back to the first page');
+    $('#page-right').click();
+    step(pageAt === 1 && nums() === '1|2|3' && board.getObjects().find(o => o.kbPageNo).text === '2', () => 'moving a page keeps the numbers in order: ' + nums());
+    $('#page-left').click();
+    step(pageAt === 0 && nums() === '1|2|3' && board.getObjects().find(o => o.kbPageNo).text === '1', () => 'and moving it back: ' + nums());
+    $('#page-delete').click();
+    await until(() => designPages.length === 2 && !restoring, 'delete a numbered page');
+    step(nums() === '1|2', () => 'deleting a page renumbers the rest: ' + nums());
+    $('#create-undo').click();
+    await until(() => designPages.length === 3 && !restoring, 'undo brings it back');
+    $('#page-numbers').click();
+    await until(() => nums() === '||' && !restoring && $('#page-numbers').textContent === '# Add page numbers', () => 'clicked again, the numbers go: ' + nums());
     await flush();
     const savedPages = JSON.parse(disk['c:designs:Pages test']);
     step(savedPages.format === 2 && savedPages.pages.length === 3, 'all pages are saved');

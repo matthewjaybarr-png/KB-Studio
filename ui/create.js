@@ -38,7 +38,7 @@ const validSize = s => Array.isArray(s) && s.length === 2 && s.every(v => Number
 const docPage = doc => doc.page === 'custom' && validSize(doc.size) ? 'custom' : PAGES[doc.page] ? doc.page : 'letter';
 const docSize = doc => docPage(doc) === 'custom' ? doc.size.map(Number) : sizeIn(docPage(doc));
 const docPages = doc => Array.isArray(doc.pages) && doc.pages.length ? doc.pages.slice(0, MAX_PAGES) : [doc.canvas || blankPage()];
-const KEEP = ['kbName', 'kbLocked', 'kbFrame', 'kbEffect', 'kbOriginal', 'kbFilter', 'kbLocal', 'kbMask', 'kbFade']; // our own fields, saved with every object
+const KEEP = ['kbName', 'kbLocked', 'kbFrame', 'kbEffect', 'kbOriginal', 'kbFilter', 'kbLocal', 'kbMask', 'kbFade', 'kbPageNo']; // our own fields, saved with every object
 const SHARED_PICTURES = new Set(['src', 'kbOriginal', 'kbMask']); // picture data kept once however many undo steps use it
 // Cards printed several to a sheet. Half and quarter cards butt up against each other with cut marks between; a
 // label sheet has its own margins and spacing (`left`, `top`, and `dx`, `dy` from one label to the next, in inches,
@@ -1825,7 +1825,7 @@ async function addPage(page = blankPage()) {
   designPages[pageAt] = board.toObject(KEEP);
   designPages.splice(pageAt + 1, 0, page);
   await loadPage(pageAt + 1);
-  commitDesign(); paintAll();
+  renumberPages(); commitDesign(); paintAll();
 }
 const duplicatePage = () => addPage(JSON.parse(JSON.stringify(board.toObject(KEEP))));
 async function deletePage() {
@@ -1833,7 +1833,7 @@ async function deletePage() {
   await Promise.allSettled([...adding]);
   designPages.splice(pageAt, 1);
   await loadPage(Math.min(pageAt, designPages.length - 1));
-  commitDesign(); paintAll();
+  renumberPages(); commitDesign(); paintAll();
 }
 function movePage(by) {
   const to = pageAt + by;
@@ -1841,8 +1841,26 @@ function movePage(by) {
   designPages[pageAt] = board.toObject(KEEP);
   [designPages[pageAt], designPages[to]] = [designPages[to], designPages[pageAt]];
   pageAt = to;
-  commitDesign(); paintPages();
+  renumberPages(); commitDesign(); paintPages();
 }
+// Page numbers are text boxes marked kbPageNo, rewritten to their page's number whenever pages are added, removed or moved.
+function renumberPages() {
+  designPages = designPages.map((p, i) => i === pageAt || !p.objects?.some(o => o.kbPageNo && o.text !== String(i + 1)) ? p : { ...p, objects: p.objects.map(o => o.kbPageNo ? { ...o, text: String(i + 1) } : o) });
+  for (const o of board.getObjects()) if (o.kbPageNo && o.text !== String(pageAt + 1)) o.set('text', String(pageAt + 1));
+  board.requestRenderAll();
+}
+// The button adds a number at the foot of every page, or takes them all away when the pages already have them.
+async function togglePageNumbers() {
+  if (!design || !pageReady()) return;
+  await Promise.allSettled([...adding]);
+  designPages[pageAt] = board.toObject(KEEP);
+  const on = designPages.some(p => p.objects.some(o => o.kbPageNo)), [w, h] = pagePx();
+  const box = i => new kbe.Textbox(String(i + 1), { left: w / 2 - 60, top: h - PX / 2 - 34, width: 120, fontSize: 28, fontFamily: settings.fonts[0] || FONTS[0], fill: textColour(), textAlign: 'center', kbName: 'Page number', kbPageNo: true }).toObject(KEEP);
+  designPages = designPages.map((p, i) => ({ ...p, objects: on ? p.objects.filter(o => !o.kbPageNo) : [...p.objects, box(i)] }));
+  await loadPage(pageAt);
+  commitDesign(); paintAll();
+}
+$('#page-numbers').onclick = togglePageNumbers;
 $('#page-add').onclick = () => addPage();
 $('#page-duplicate').onclick = duplicatePage;
 $('#page-delete').onclick = deletePage;
@@ -1864,6 +1882,7 @@ function paintPages() {
     return b;
   }));
   $('#page-count').textContent = `Page ${pageAt + 1} of ${n}`;
+  $('#page-numbers').textContent = designPages.some((p, i) => i !== pageAt && p.objects?.some(o => o.kbPageNo)) || board.getObjects().some(o => o.kbPageNo) ? '# Remove page numbers' : '# Add page numbers';
   $('#page-left').disabled = pageAt === 0; $('#page-right').disabled = pageAt === n - 1;
   $('#page-delete').disabled = n < 2; $('#page-add').disabled = $('#page-duplicate').disabled = n >= MAX_PAGES;
 }
