@@ -1,5 +1,5 @@
 // Classroom games and plans, in Classroom's Puzzles and worksheets: bingo cards (a different one for each child, with
-// calling cards to cut apart), memory game cards, a seating plan from a class list, telling the time, missing numbers, a word scramble and picture sudoku. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
+// calling cards to cut apart), memory game cards, a seating plan from a class list, telling the time, missing numbers, a word scramble, picture sudoku and feelings wall cards. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
 // Needs create.js, worksheets.js, preschool.js and posters.js.
 
 const plainLabel = name => picLabel(name).replace(/ \(.*\)$/, '');
@@ -263,6 +263,16 @@ async function sudokuPage(title, s, items, answers) {
   return toPage(parts);
 }
 
+// ---- Feelings: wall cards with a face and its word, for circle time ----
+const FEELINGS = [['Happy', 'grinning face'], ['Sad', 'crying face'], ['Angry', 'angry face'], ['Scared', 'fearful face'], ['Surprised', 'astonished face'], ['Tired', 'yawning face'],
+  ['Excited', 'star-struck'], ['Shy', 'flushed face'], ['Silly', 'zany face'], ['Calm', 'relieved face'], ['Worried', 'worried face'], ['Sick', 'face with thermometer'],
+  ['Loved', 'smiling face with hearts'], ['Proud', 'beaming face with smiling eyes'], ['Confused', 'confused face'], ['Sleepy', 'sleeping face']];
+async function feelingCard([word, face], x, y, w, h, i) {
+  return [cardWords('I feel', x, y + h * 0.06, w, h * 0.06, { fontWeight: 'normal', fill: '#666666', kbName: 'I feel' }),
+    await pic(face, x + w / 2, y + h * 0.46, Math.min(w * 0.68, h * 0.52), { kbName: word + ' face' }),
+    cardWords(word, x, y + h * 0.78, w, h * 0.11, { fill: CARD_COLOURS[i % CARD_COLOURS.length][1] })];
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
@@ -308,7 +318,9 @@ Object.assign(SHEET_KINDS, {
       const rand = seededRandom(seed), s = sudoku(SUDOKU_GAPS[$('#sheet-sudoku-level').value], rand);
       const items = $('#sheet-sudoku-what').value === 'numbers' ? ['1', '2', '3', '4'].map(text => ({ text })) : shuffled(BINGO_PICS, rand).slice(0, 4).map(p => ({ pic: p }));
       return { pages: [await sudokuPage(title, s, items, false), ...(key ? [await sudokuPage(title, s, items, true)] : [])] };
-    } }
+    } },
+  'feelings-cards': { title: 'Feelings', words: false, key: false,
+    async make() { return { pages: await cardPages(FEELINGS, cardLayout(), feelingCard), note: `${FEELINGS.length} feelings, from Happy to Sleepy.` }; } }
 });
 const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; };
 $('#sheet-bingo-what').onchange = bingoWords;
@@ -319,3 +331,4 @@ $('#sheet-memory').onclick = () => openSheet('memory');
 $('#sheet-missing').onclick = () => openSheet('missing');
 $('#sheet-scramble').onclick = () => openSheet('scramble');
 $('#sheet-sudoku').onclick = () => openSheet('sudoku');
+$('#sheet-feelings-cards').onclick = () => openSheet('feelings-cards');

@@ -3334,6 +3334,11 @@ const test = `<script>
         await made('#sheet-sudoku', () => { step(shownRow('#sheet-sudoku-level') && shownRow('#sheet-key') && !shownRow('#sheet-missing-upto'), 'sudoku asks what with and how hard'); },
           pages => pages.length === 2 && pages[0].objects.filter(o => o.kbName === 'Empty square').length === 7 && pages[0].objects.filter(o => o.kbName === 'Line to cut').length === 7 && pages[0].objects.filter(o => /^image$/i.test(o.type)).length === 16 && pages[1].objects.filter(o => o.kbName === 'Answer').length === 7 && pages[1].objects.filter(o => /^image$/i.test(o.type)).length === 16, 'Picture sudoku');
         await made('#sheet-sudoku', () => { $('#sheet-sudoku-what').value = 'numbers'; $('#sheet-sudoku-level').value = 'hard'; }, pages => pages[0].objects.filter(o => o.kbName === 'Square words').length === 16 && pages[0].objects.filter(o => o.kbName === 'Line to cut').length === 9, 'Number sudoku');
+        // Feelings wall cards: a face and its word on each, four to a page or one.
+        await emojiReady; step(FEELINGS.length === 16 && new Set(FEELINGS.map(f => f[1])).size === 16 && FEELINGS.every(f => emojiEntries.some(e => e.name === f[1])), 'every feeling has its own face in the clip art');
+        await made('#sheet-feelings-cards', () => { step(shownRow('#sheet-card-layout') && !shownRow('#sheet-key') && !shownRow('#sheet-card-numbers'), 'feelings ask one or four a page'); $('#sheet-card-layout').value = 'four'; },
+          pages => pages.length === 4 && pages[0].objects.filter(o => o.kbName === 'Card').length === 4 && pages[0].objects.some(o => o.kbName === 'Happy face') && pages[3].objects.some(o => o.kbName === 'Card words' && o.text === 'Sleepy'), 'Feelings');
+        await made('#sheet-feelings-cards', () => { $('#sheet-card-layout').value = 'one'; }, pages => pages.length === 16 && pages[1].objects.some(o => o.text === 'Sad'), 'Feelings big');
         $('#sheet-math').click(); step(!shownRow('#sheet-maze-size') && !shownRow('#sheet-count-upto') && shownRow('#sheet-key'), 'Math practice hides the preschool choices'); $('#sheet-close').click();
       }
       $('#sheet-key').checked = true;
