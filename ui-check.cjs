@@ -382,6 +382,15 @@ const test = `<script>
     step(clear[0] < unhazed[0] && hazy[0] > unhazed[0] && [clear, hazy].every(p => Math.max(p[0], p[1], p[2]) - Math.min(p[0], p[1], p[2]) <= 1) && chromaOf(clear) > chromaOf(unhazed) && chromaOf(hazy) < chromaOf(unhazed),
       'dehaze deepens grey and colours up, negative adds haze, greys stay grey (' + [unhazed[0], clear[0], hazy[0], chromaOf(unhazed), chromaOf(clear), chromaOf(hazy)] + ')');
     step(settingsOf({ clarity: 30 }).clarity === 30 && fullRecipe({}).dehaze === 0 && !isDefault(fullRecipe({ texture: 5 })), 'Presence copies with the settings, defaults to 0 and counts as an edit');
+    // Tone curve: each slider bends its own part of a grey ramp, black and white stay put, the ramp keeps rising.
+    dev.setRaw(rawImage(11, 1, [...Array(11)].flatMap((_, i) => { const v = i / 10; return [v, v, v]; })), false);
+    const greyRamp = recipe => { const d = dev.pixels(recipe, 11).data; return [...Array(11)].map((_, i) => d[i * 4 + 1]); }, curveFlat = greyRamp({});
+    step(greyRamp({ curveShadows: 0, curveDarks: 0, curveLights: 0, curveHighlights: 0 }).every((v, i) => v === curveFlat[i]), 'the tone curve at zero is bit-identical');
+    const curveRising = r => r.every((v, i) => !i || v >= r[i - 1]), curveEnds = r => r[0] === curveFlat[0] && r[10] === curveFlat[10];
+    const curveDark = greyRamp({ curveDarks: 100 }), curveBright = greyRamp({ curveHighlights: -100 }), curveZigzag = greyRamp({ curveShadows: 100, curveDarks: -100, curveLights: 100, curveHighlights: -100 });
+    step(curveDark[1] > curveFlat[1] + 10 && Math.abs(curveDark[9] - curveFlat[9]) <= 1 && curveBright[6] < curveFlat[6] - 10 && Math.abs(curveBright[1] - curveFlat[1]) <= 1 && [curveDark, curveBright, curveZigzag].every(r => curveRising(r) && curveEnds(r)),
+      'Darks lifts the darker greys, Brightest pulls down the brightest, and even a zigzag keeps the ramp rising (' + [curveFlat, curveDark, curveBright, curveZigzag].map(r => r.join(' ')).join(' / ') + ')');
+    step(settingsOf({ curveLights: 20 }).curveLights === 20 && fullRecipe({}).curveDarks === 0 && !isDefault(fullRecipe({ curveShadows: 5 })), 'the tone curve copies with the settings, defaults to 0 and counts as an edit');
     // Auto: a dark photo is brightened, a bright one darkened, a flat one given contrast; its middle lands near mid-grey.
     const ramp = (lo, hi) => { const v = []; for (let i = 0; i < 256; i++) { const t = lo + (hi - lo) * (i % 16) / 15; v.push(t, t * 0.9, t * 0.8); } return v; };
     const autoMiddle = r => { const d = dev.pixels(r, 16).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255; return s / (d.length / 4); };
@@ -507,6 +516,10 @@ const test = `<script>
     await until(() => !savedRecipe('IMG_0001')?.greenS && $('#mix-reset').disabled && savedRecipe('IMG_0001')?.contrast === 30, 'Reset colour mixer clears only the bands');
     slide('greenS', 40);
     slide('clarity', 25);
+    const curveInk = () => { const c = $('#curve'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) n += d[i] > 0; return n; };
+    const inkBefore = curveInk(); slide('curveDarks', 60);
+    await until(() => savedRecipe('IMG_0001')?.curveDarks === 60 && $('#curve').getBoundingClientRect().width > 100 && curveInk() > 2000 && curveInk() !== inkBefore, 'a tone curve slider saves, and the graph shows the histogram and the bent curve');
+    slide('curveDarks', 0);
     await until(() => savedRecipe('IMG_0001')?.clarity === 25 && savedRecipe('IMG_0001')?.greenS === 40, 'a Presence slider saves with the photo');
     press('\\\\');
     step($('#develop-caption').textContent.includes('Before'), 'holding the backslash key shows before');
@@ -2001,6 +2014,15 @@ const test = `<script>
     board.discardActiveObject(); paintPanel();
     $('#colours-default').querySelector('[data-colour="#f4e1c1"]').click();
     step(board.backgroundColor === '#f4e1c1', 'with nothing selected it colours the background');
+    const purple = board.getObjects().find(o => o.fill === '#5e17eb'), pickAt = kbe.util.transformPoint(purple.getCenterPoint(), board.viewportTransform), pickBox = board.upperCanvasEl.getBoundingClientRect();
+    const pickDown = () => board.upperCanvasEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX: pickBox.left + pickAt.x, clientY: pickBox.top + pickAt.y }));
+    board.renderAll(); $('#colour-pick').click();
+    step($('#pop-colours').hidden && board.upperCanvasEl.classList.contains('eyedropper'), () => 'Pick a colour closes the panel and waits for a click on the page: ' + [shown('#colour-pick'), $('#pop-colours').hidden, board.upperCanvasEl.className, eyedropper]);
+    press('Escape');
+    step(!board.upperCanvasEl.classList.contains('eyedropper'), 'Escape gives up picking');
+    $('#colour-pick').click(); pickDown();
+    step(board.backgroundColor === '#5e17eb' && !board.getActiveObject() && !board.upperCanvasEl.classList.contains('eyedropper'), () => 'a click on the purple square takes its colour, without selecting it: ' + board.backgroundColor);
+    $('#colours-open').click(); $('#colours-default').querySelector('[data-colour="#f4e1c1"]').click();
     closeMenus();
     selectObjects([effectText]);
     step(shown('#text-effects'), 'text has an effects grid');
@@ -2014,15 +2036,6 @@ const test = `<script>
     await settle(flush(), 'effects save'); await settle(openDesign('Effects test'), 'effects reopen');
     const liftText = board.getObjects()[0];
     step(liftText.kbEffect === 'lift' && liftText.shadow?.offsetY > 0 && liftText.fill === '#8c52ff', 'text effects survive save and reopen');
-    const purple = board.getObjects().find(o => o.fill === '#5e17eb'), pickAt = kbe.util.transformPoint(purple.getCenterPoint(), board.viewportTransform), pickBox = board.upperCanvasEl.getBoundingClientRect();
-    const pickDown = () => board.upperCanvasEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX: pickBox.left + pickAt.x, clientY: pickBox.top + pickAt.y }));
-    board.renderAll(); $('#colour-pick').click();
-    step($('#pop-colours').hidden && board.upperCanvasEl.classList.contains('eyedropper'), () => 'Pick a colour closes the panel and waits for a click on the page: ' + [shown('#colour-pick'), $('#pop-colours').hidden, board.upperCanvasEl.className, eyedropper]);
-    press('Escape');
-    step(!board.upperCanvasEl.classList.contains('eyedropper'), 'Escape gives up picking');
-    $('#colour-pick').click(); pickDown();
-    step(board.backgroundColor === '#5e17eb' && !board.getActiveObject() && !board.upperCanvasEl.classList.contains('eyedropper'), () => 'a click on the purple square takes its colour, without selecting it: ' + board.backgroundColor);
-    $('#colours-open').click(); $('#colours-default').querySelector('[data-colour="#f4e1c1"]').click();
     selectObjects([liftText]); $('#text-effects').querySelector('[data-effect=none]').click();
     step(!liftText.kbEffect && !liftText.shadow && liftText.fill === '#8c52ff', 'None takes the effect off');
     // Layers drag: the list is front-first, so the rectangle's row (top) dropped below the text's row sends it behind.

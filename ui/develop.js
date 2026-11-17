@@ -9,6 +9,32 @@ const MIX_BANDS = [['red', 'Red', 29, '#e0403a'], ['orange', 'Orange', 60, '#ec8
   ['aqua', 'Aqua', 195, '#3cc4c8'], ['blue', 'Blue', 264, '#3c64e0'], ['purple', 'Purple', 300, '#9a4ad8'], ['magenta', 'Magenta', 328, '#d840b4']];
 const MIX_KEYS = MIX_BANDS.flatMap(([band]) => ['H', 'S', 'L'].map(k => band + k));
 
+// Tone curve: four sliders raise or lower the curve at fixed points between black and white (each by up to
+// CURVE_REACH), and a monotone cubic (Fritsch-Carlson) joins the points, so the curve always rises and never overshoots.
+const CURVE_KEYS = [['curveShadows', 'Darkest'], ['curveDarks', 'Darks'], ['curveLights', 'Lights'], ['curveHighlights', 'Brightest']];
+const CURVE_X = [0, 0.2, 0.4, 0.6, 0.8, 1], CURVE_REACH = 0.15;
+// The points' heights and slopes for slider values a (-1 to 1 each): what the shader's u_curveY and u_curveM get.
+function curvePoints(a) {
+  const y = CURVE_X.map((x, i) => i && i < 5 ? x + a[i - 1] * CURVE_REACH : x);
+  for (let i = 1; i < 6; i++) y[i] = Math.min(1, Math.max(y[i], y[i - 1])); // pushed past a neighbour, it stops level with it
+  const step = 0.2, secant = y.slice(1).map((v, i) => (v - y[i]) / step);
+  const m = y.map((_, i) => i === 0 ? secant[0] : i === 5 ? secant[4] : secant[i - 1] * secant[i] <= 0 ? 0 : (secant[i - 1] + secant[i]) / 2);
+  // a stretch between two untouched points stays on the diagonal, so lifting Darks never dims the darkest greys
+  const off = [0, ...a, 0];
+  for (let i = 0; i < 5; i++) if (!off[i] && !off[i + 1] && y[i] === CURVE_X[i] && y[i + 1] === CURVE_X[i + 1]) m[i] = m[i + 1] = 1;
+  for (let i = 0; i < 5; i++) {
+    if (!secant[i]) { m[i] = m[i + 1] = 0; continue; }
+    const p = m[i] / secant[i], q = m[i + 1] / secant[i], t = p * p + q * q;
+    if (t > 9) { m[i] = 3 * p / Math.sqrt(t) * secant[i]; m[i + 1] = 3 * q / Math.sqrt(t) * secant[i]; }
+  }
+  return { y, m };
+}
+// The curve at display value v: the shader's toneCurve, for drawing it.
+function curveAt(v, { y, m }) {
+  const i = Math.min(4, Math.floor(v * 5)), t = v * 5 - i, t2 = t * t, t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * y[i] + (t3 - 2 * t2 + t) * 0.2 * m[i] + (-2 * t3 + 3 * t2) * y[i + 1] + (t3 - t2) * 0.2 * m[i + 1];
+}
+
 const SLIDERS = [
   { key: 'temp', label: 'Temperature', group: 'White balance', min: -100, max: 100, step: 1 },
   { key: 'tint', label: 'Tint', min: -100, max: 100, step: 1 },
@@ -18,6 +44,7 @@ const SLIDERS = [
   { key: 'shadows', label: 'Shadows', min: -100, max: 100, step: 1 },
   { key: 'whites', label: 'Whites', min: -100, max: 100, step: 1 },
   { key: 'blacks', label: 'Blacks', min: -100, max: 100, step: 1 },
+  ...CURVE_KEYS.map(([key, label], i) => ({ key, label, group: i ? undefined : 'Tone curve', min: -100, max: 100, step: 1 })),
   { key: 'texture', label: 'Texture', group: 'Presence', min: -100, max: 100, step: 1 },
   { key: 'clarity', label: 'Clarity', min: -100, max: 100, step: 1 },
   { key: 'dehaze', label: 'Dehaze', min: -100, max: 100, step: 1 },
@@ -37,7 +64,7 @@ const SLIDERS = [
   { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1 },
   { key: 'fade', label: 'Fade', min: 0, max: 100, step: 1 }
 ];
-const RECIPE_VERSION = 8;
+const RECIPE_VERSION = 9;
 const DETAIL_EDGE = 3072; // main.rs DEVELOP_EDGE: Develop's source is averaged down by the whole factor ceil(long side / this), which is also Detail's scale at full size
 const SETTINGS = [...SLIDERS.map(s => s.key), 'look']; // everything but retouch and crop: what copy, paste and presets carry
 
@@ -190,6 +217,8 @@ uniform float u_look, u_mono, u_lookContrast, u_lookSat, u_fade, u_grain, u_vign
 uniform vec3 u_filter, u_lift, u_gamma, u_gain;
 uniform float u_detailScale, u_sharpen, u_sharpenMask, u_nrColour, u_nrLuma, u_texture, u_clarity, u_dehaze;
 uniform vec2 u_toneLo, u_toneHi, u_splitLo, u_splitHi, u_grainScale;
+// Tone curve (curvePoints): heights and slopes at display values 0, 0.2 ... 1.
+uniform bool u_curve; uniform float u_curveY[6], u_curveM[6];
 // Colour mixer: per band hue (-1..1 = -30..30 degrees), saturation and luminance (-1..1), band centres in OkLab degrees.
 uniform bool u_mix; uniform float u_mixH[8], u_mixS[8], u_mixL[8], u_mixAt[8];
 in vec2 v_uv, v_src; out vec4 color;
@@ -197,6 +226,13 @@ const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
 vec3 toSrgb(vec3 x) { x = max(x, 0.0); return mix(12.92 * x, 1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, x)); }
 vec3 toLinear(vec3 x) { return mix(x / 12.92, pow((x + 0.055) / 1.055, vec3(2.4)), step(0.04045, x)); }
+
+// The tone curve at display value v (curveAt in JS).
+float toneCurve(float v) {
+  int i = min(4, int(v * 5.0));
+  float t = v * 5.0 - float(i), t2 = t * t, t3 = t2 * t;
+  return clamp((2.0 * t3 - 3.0 * t2 + 1.0) * u_curveY[i] + (t3 - 2.0 * t2 + t) * 0.2 * u_curveM[i] + (-2.0 * t3 + 3.0 * t2) * u_curveY[i + 1] + (t3 - t2) * 0.2 * u_curveM[i + 1], 0.0, 1.0);
+}
 
 // Contrast as a power curve each side of a mid-grey pivot: keeps 0 and 1, steeper or flatter in between.
 vec3 contrast(vec3 d, float a) {
@@ -354,6 +390,7 @@ void main() {
   d += u_whites * 0.25 * d * d;
   d += u_blacks * 0.15 * (1.0 - d) * (1.0 - d);
   d = clamp(d, 0.0, 1.0);
+  if (u_curve) d = vec3(toneCurve(d.r), toneCurve(d.g), toneCurve(d.b));
   // Dehaze: take away (or add) an even veil of light, then win back (or give up) the colour the veil hid. Greys stay grey.
   if (u_dehaze != 0.0) {
     float veil = u_dehaze * 0.12;
@@ -482,6 +519,10 @@ class Developer {
     gl.uniform3fv(u('u_wb'), whiteBalance(r.temp, r.tint));
     gl.uniform1f(u('u_exposure'), 2 ** r.exposure);
     for (const key of ['contrast', 'highlights', 'shadows', 'whites', 'blacks', 'vibrance', 'saturation', 'vignette']) gl.uniform1f(u('u_' + key), r[key] / 100);
+    const curve = curvePoints(CURVE_KEYS.map(([key]) => r[key] / 100));
+    gl.uniform1i(u('u_curve'), CURVE_KEYS.some(([key]) => r[key]) ? 1 : 0);
+    gl.uniform1fv(u('u_curveY'), curve.y);
+    gl.uniform1fv(u('u_curveM'), curve.m);
     gl.uniform1i(u('u_mix'), MIX_KEYS.some(k => r[k]) ? 1 : 0);
     for (const k of 'HSL') gl.uniform1fv(u('u_mix' + k), MIX_BANDS.map(([band]) => r[band + k] / 100));
     gl.uniform1fv(u('u_mixAt'), MIX_BANDS.map(b => b[2]));

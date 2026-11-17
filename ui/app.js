@@ -237,6 +237,7 @@ for (const s of SLIDERS) {
   if (s.group === 'Light') sliders.insertAdjacentHTML('beforeend', '<button id="auto" type="button" title="Set the Light sliders for this photo">Auto</button>');
   if (s.group === 'Look') sliders.insertAdjacentHTML('beforeend', `<select id="look" aria-label="Look"><option value="">None</option>${
     [...new Set(LOOKS.map(l => l.group).filter(Boolean))].map(group => `<optgroup label="${group}"></optgroup>`).join('')}</select>`);
+  if (s.group === 'Tone curve') sliders.insertAdjacentHTML('beforeend', '<canvas id="curve" width="480" height="240" title="Histogram of the edited photo, with the tone curve over it"></canvas>');
   if (s.group === 'Colour mixer') sliders.insertAdjacentHTML('beforeend', `<div class="bands">${MIX_BANDS.map(([band, name]) =>
     `<button type="button" data-band="${band}" title="${name}" aria-label="${name}"></button>`).join('')}</div>`);
   // The window's CSP ignores style attributes, so the swatch colours go in through the DOM.
@@ -373,6 +374,30 @@ function draw() {
   // Cropping shows the whole straightened photo, with the crop drawn over it.
   if (developer) developer.crop = !editing ? NO_CROP : cropping ? { ...NO_CROP, angle: cropping.crop.angle } : editing.recipe.crop;
   if (developer && !frame) frame = requestAnimationFrame(() => { frame = 0; developer.show(before || !editing ? {} : editing.recipe); paintOverlay(); });
+  clearTimeout(curveTimer); curveTimer = setTimeout(paintCurve, 120);
+}
+
+// The tone curve graph: the shown photo's brightness histogram (from a small render), the curve and its points.
+let curveTimer = 0;
+function paintCurve() {
+  const c = $('#curve'), g = c.getContext('2d'), w = c.width, h = c.height, css = getComputedStyle(c);
+  g.clearRect(0, 0, w, h);
+  if (!c.offsetParent) return;
+  const recipe = fullRecipe(before || !editing ? {} : editing.recipe);
+  if (developer?.width && editing?.ready) {
+    const d = developer.pixels(recipe, 160).data, bins = new Float32Array(64);
+    for (let i = 0; i < d.length; i += 4) bins[Math.min(63, (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 256 * 64 | 0)]++;
+    const top = Math.max(...bins.slice(1, 63), 1); // pure black and white can tower over the rest, so they don't set the scale
+    g.fillStyle = css.getPropertyValue('--muted') || '#888'; g.globalAlpha = 0.45;
+    bins.forEach((n, i) => { const bh = Math.min(1, n / top) * h; g.fillRect(i * w / 64, h - bh, w / 64 + 0.5, bh); });
+    g.globalAlpha = 1;
+  }
+  const points = curvePoints(CURVE_KEYS.map(([key]) => recipe[key] / 100));
+  g.strokeStyle = css.color; g.lineWidth = 3; g.beginPath();
+  for (let x = 0; x <= w; x += 4) g.lineTo(x, h - curveAt(x / w, points) * h);
+  g.stroke();
+  g.fillStyle = css.color;
+  CURVE_X.slice(1, 5).forEach((x, i) => { g.beginPath(); g.arc(x * w, h - points.y[i + 1] * h, 6, 0, 7); g.fill(); });
 }
 new ResizeObserver(draw).observe(canvas);
 

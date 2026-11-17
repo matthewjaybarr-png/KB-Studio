@@ -5,6 +5,7 @@
 - Develop has a Colour mixer: pick one of eight colours (red to magenta) and change its hue, saturation and brightness without touching the other colours or greys. "Reset colour mixer" clears it. Edits made with it need this version or newer to open.
 - Develop has Presence: Texture brings out (or smooths) fine detail, Clarity adds punch to midtones, and Dehaze cuts through haze or adds a soft veil. Edits that use them need this version or newer to open.
 - Develop has an Auto button under Light: it sets exposure, contrast, highlights, shadows, whites and blacks to suit the photo. Undo takes it back.
+- Develop has a Tone curve: Darkest, Darks, Lights and Brightest bend their part of the curve, over a histogram of the edited photo. Edits that use it need this version or newer to open.
 - Create's Colours panel has Pick a colour from the page: click anywhere on the design to use that colour.
 - Deliver has a Copyright field: the text is written into each delivered photo's details (EXIF).
 
