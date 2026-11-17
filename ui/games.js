@@ -1,5 +1,5 @@
 // Classroom games and plans, in Classroom's Puzzles and worksheets: bingo cards (a different one for each child, with
-// calling cards to cut apart), memory game cards, a seating plan from a class list, telling the time and missing numbers. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
+// calling cards to cut apart), memory game cards, a seating plan from a class list, telling the time, missing numbers and a word scramble. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
 // Needs create.js, worksheets.js, preschool.js and posters.js.
 
 const plainLabel = name => picLabel(name).replace(/ \(.*\)$/, '');
@@ -189,6 +189,31 @@ function missingPage(title, upto, missing, answers) {
   return toPage(parts);
 }
 
+// ---- Word scramble: her words with their letters mixed up, a line to write each on, and a word bank if wanted ----
+// The words to use: letters only, small, no repeats, twelve at most.
+const scrambleList = words => [...new Set(words.split(/\r?\n/).map(w => w.toLowerCase().replace(/[^\p{L}]/gu, '')).filter(w => w.length >= 2))].slice(0, 12);
+// The word's letters in another order (the same order only when every letter is the same).
+function scrambled(word, rand) {
+  for (let tries = 0; tries < 20; tries++) { const mixed = shuffled([...word], rand).join(''); if (mixed !== word) return mixed; }
+  return word;
+}
+function scramblePage(title, words, mixed, bank, answers) {
+  const parts = [...preHeader(answers ? keyTitle(title) : title), T('Put the letters in the right order and write the word.', 48, 150, { width: 720, fontSize: 20, textAlign: 'center', fill: '#666666', kbName: 'Instructions' })];
+  const pitch = Math.min(72, (bank ? 660 : 820) / words.length), size = Math.min(34, pitch * 0.5);
+  for (const [i, word] of words.entries()) {
+    const y = 195 + i * pitch;
+    // Non-breaking spaces between the letters keep them on one line, shrunk to fit if the word is long.
+    parts.push(fitText(`${i + 1}.`, 56, y, 50, pitch, { fontSize: size * 0.7, fontWeight: 'normal', fill: '#666666', kbName: 'Number' }),
+      fitText([...mixed[i]].join(' '), 116, y, 320, pitch, { fontSize: size, textAlign: 'left', kbName: 'Mixed-up word' }),
+      new kbe.Path(`M460 ${y + pitch * 0.78} L750 ${y + pitch * 0.78}`, { fill: '', stroke: '#333333', strokeWidth: 2, kbName: 'Line to write on' }));
+    if (answers) parts.push(fitText(word, 460, y, 290, pitch * 0.78, { fontSize: size, fill: SHEET_PINK, kbName: 'Answer' }));
+  }
+  if (bank) parts.push(R(48, 880, 720, 136, { rx: 16, ry: 16, fill: '#ece4fb', stroke: '#9a86d6', strokeWidth: 2.5, kbName: 'Word bank box' }),
+    T('Word bank', 48, 890, { width: 720, fontSize: 18, textAlign: 'center', fill: '#666666', kbName: 'Word bank title' }),
+    fitText(bank.join('    '), 64, 918, 688, 90, { fontSize: 26, fontWeight: 'normal', kbName: 'Word bank' }));
+  return toPage(parts);
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
@@ -221,6 +246,13 @@ Object.assign(SHEET_KINDS, {
     async make(title, key, seed) {
       const upto = +$('#sheet-missing-upto').value, missing = missingNumbers(upto, $('#sheet-missing-share').value, seededRandom(seed));
       return { pages: [missingPage(title, upto, missing, false), ...(key ? [missingPage(title, upto, missing, true)] : [])] };
+    } },
+  scramble: { title: 'Word scramble', words: true, hint: 'One word per line, up to 12. Pick one of your lists above to fill it in.',
+    async make(title, key, seed, typed) {
+      const words = scrambleList(typed), rand = seededRandom(seed);
+      if (!words.length) return { error: 'Type a few words first, one per line.' };
+      const mixed = words.map(w => scrambled(w, rand)), bank = $('#sheet-scramble-bank').checked ? shuffled(words, rand) : null;
+      return { pages: [scramblePage(title, words, mixed, bank, false), ...(key ? [scramblePage(title, words, mixed, bank, true)] : [])] };
     } }
 });
 const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; };
@@ -230,3 +262,4 @@ $('#sheet-seating').onclick = () => openSheet('seating');
 $('#sheet-clock').onclick = () => openSheet('clock');
 $('#sheet-memory').onclick = () => openSheet('memory');
 $('#sheet-missing').onclick = () => openSheet('missing');
+$('#sheet-scramble').onclick = () => openSheet('scramble');

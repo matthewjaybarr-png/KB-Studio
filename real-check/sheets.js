@@ -14,7 +14,8 @@
     'sheet-seating': () => { set('#sheet-seat-layout', 'groups4'); set('#sheet-seat-order', 'mixed'); $('#sheet-words').value = Array.from({ length: 22 }, (_, i) => ['Ava', 'Ben', 'Charlotte', 'Dev', 'Smith, Ella'][i % 5] + (i > 4 ? ' ' + i : '')).join('\n'); },
     'sheet-clock': () => { set('#sheet-clock-level', 'quarter'); set('#sheet-clock-mode', 'read'); },
     'sheet-memory': () => { set('#sheet-memory-what', 'words'); set('#sheet-memory-pairs', '9'); },
-    'sheet-missing': () => { set('#sheet-missing-upto', '50'); set('#sheet-missing-share', 'half'); }
+    'sheet-missing': () => { set('#sheet-missing-upto', '50'); set('#sheet-missing-share', 'half'); },
+    'sheet-scramble': () => { $('#sheet-words').value = 'cat\ndog\nfrog\nrabbit\nelephant\nbutterfly\nsun\nmoon'; }
   };
   try {
     await newDesign(); await wait(1500); if (!$('#create-whatsnew').hidden) $('#create-whatsnew button').click(); // the makers live in Create's Classroom drawer, so a design is open first
