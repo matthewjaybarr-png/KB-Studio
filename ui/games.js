@@ -1,5 +1,5 @@
 // Classroom games and plans, in Classroom's Puzzles and worksheets: bingo cards (a different one for each child, with
-// calling cards to cut apart) and a seating plan from a class list. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
+// calling cards to cut apart), a seating plan from a class list and telling the time. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
 // Needs create.js, worksheets.js, preschool.js and posters.js.
 
 const plainLabel = name => picLabel(name).replace(/ \(.*\)$/, '');
@@ -106,6 +106,42 @@ function seatingPage(title, names, layout) {
   return toPage(parts);
 }
 
+// ---- Telling the time: six clock faces to read, or six times to draw the hands for ----
+const CLOCK_STEPS = { hour: [0], half: [0, 30], quarter: [0, 15, 30, 45], five: Array.from({ length: 12 }, (_, i) => i * 5) };
+// `n` different times as [hour, minutes].
+function clockTimes(level, rand, n = 6) {
+  const all = [];
+  for (let h = 1; h <= 12; h++) for (const m of CLOCK_STEPS[level] || CLOCK_STEPS.hour) all.push([h, m]);
+  return shuffled(all, rand).slice(0, n);
+}
+const clockText = ([h, m]) => h + ':' + String(m).padStart(2, '0');
+// Degrees clockwise from 12 for the hour hand (it creeps on as the minutes pass) and the minute hand.
+const clockAngles = ([h, m]) => [(h % 12 + m / 60) * 30, m * 6];
+const clockPoint = (cx, cy, deg, len) => [cx + Math.sin(deg * Math.PI / 180) * len, cy - Math.cos(deg * Math.PI / 180) * len];
+// The face as one group, and the two hands (if wanted) as their own lines so they can be turned or recoloured.
+function clockParts(cx, cy, r, time, hands, colour = '#333333') {
+  const ticks = Array.from({ length: 60 }, (_, i) => { const [x1, y1] = clockPoint(cx, cy, i * 6, r * (i % 5 ? 0.95 : 0.9)), [x2, y2] = clockPoint(cx, cy, i * 6, r); return `M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}`; }).join(' ');
+  const size = r * 0.24, face = [new kbe.Circle({ left: cx - r, top: cy - r, radius: r, fill: '#ffffff', stroke: '#333333', strokeWidth: 4, kbName: 'Face' }),
+    new kbe.Path(ticks, { fill: '', stroke: '#333333', strokeWidth: 2, kbName: 'Minute marks' })];
+  for (let n = 1; n <= 12; n++) { const [x, y] = clockPoint(cx, cy, n * 30, r * 0.74); face.push(T(String(n), x - size, y - size * 0.58, { width: size * 2, fontSize: size, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', kbName: 'Number' })); }
+  const parts = [new kbe.Group(face, { kbName: 'Clock' })];
+  if (hands) {
+    const [hour, minute] = clockAngles(time), hand = (deg, len, width, kbName) => { const [x, y] = clockPoint(cx, cy, deg, len); return new kbe.Path(`M${cx} ${cy} L${x.toFixed(1)} ${y.toFixed(1)}`, { fill: '', stroke: colour, strokeWidth: width, strokeLineCap: 'round', kbName }); };
+    parts.push(hand(hour, r * 0.45, 8, 'Hour hand'), hand(minute, r * 0.68, 5, 'Minute hand'));
+  }
+  parts.push(new kbe.Circle({ left: cx - 7, top: cy - 7, radius: 7, fill: colour, stroke: colour, strokeWidth: 0, kbName: 'Middle' }));
+  return parts;
+}
+function clockPage(title, times, mode, answers) {
+  const parts = [...preHeader(answers ? keyTitle(title) : title), T(mode === 'draw' ? 'Draw the hands to show the time.' : 'Write the time under each clock.', 48, 150, { width: 720, fontSize: 20, textAlign: 'center', fill: '#666666', kbName: 'Instructions' })];
+  for (const [i, time] of times.entries()) {
+    const cx = 228 + (i % 2) * 360, cy = 300 + Math.floor(i / 2) * 272, r = 100, shown = mode === 'draw' || answers;
+    parts.push(...clockParts(cx, cy, r, time, mode === 'read' || answers, answers && mode === 'draw' ? SHEET_PINK : '#333333'),
+      T(shown ? clockText(time) : '____ : ____', cx - 120, cy + r + 10, { width: 240, fontSize: 34, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: answers && mode === 'read' ? SHEET_PINK : '#222222', kbName: answers && mode === 'read' ? 'Answer' : 'Time' }));
+  }
+  return toPage(parts);
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
@@ -123,9 +159,15 @@ Object.assign(SHEET_KINDS, {
       if (names.length < 2) return { error: 'Type their names first, one per line, or pick your class list.' };
       if ($('#sheet-seat-order').value === 'mixed') names = shuffled(names, seededRandom(seed));
       return { pages: [seatingPage(title, names, $('#sheet-seat-layout').value)], note: `${names.length} desks. Drag a desk to move it; Ungroup it to change the name.` };
+    } },
+  clock: { title: 'Telling the time', words: false,
+    async make(title, key, seed) {
+      const times = clockTimes($('#sheet-clock-level').value, seededRandom(seed)), mode = $('#sheet-clock-mode').value;
+      return { pages: [clockPage(title, times, mode, false), ...(key ? [clockPage(title, times, mode, true)] : [])] };
     } }
 });
 const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; };
 $('#sheet-bingo-what').onchange = bingoWords;
 $('#sheet-bingo').onclick = () => { openSheet('bingo'); bingoWords(); };
 $('#sheet-seating').onclick = () => openSheet('seating');
+$('#sheet-clock').onclick = () => openSheet('clock');

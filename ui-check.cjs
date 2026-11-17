@@ -3298,6 +3298,14 @@ const test = `<script>
         step(seatNames('Smith, Ava\\n  Ben   Lee \\n\\nCara', true).join() === 'Ava,Ben,Cara' && seatNames('Smith, Ava', false)[0] === 'Ava Smith', 'seating turns "Smith, Ava" round and keeps first names');
         for (const layout of ['rows', 'groups4', 'horseshoe', 'circle']) await made('#sheet-seating', () => { step(shownRow('#sheet-seat-layout') && !shownRow('#sheet-key') && !shownRow('#sheet-bingo-size') && !$('#sheet-words-part').hidden, 'seating asks for names and how the desks go'); $('#sheet-seat-layout').value = layout; $('#sheet-words').value = Array.from({ length: 23 }, (_, i) => ['Ava', 'Benjamin', 'Charlotte-Rose', 'Di'][i % 4] + ' ' + i).join('\\n'); },
           pages => pages.length === 1 && pages[0].objects.filter(o => /^Desk: /.test(o.kbName)).length === 23 && pages[0].objects.some(o => o.kbName === 'Desk: Charlotte-Rose'), 'Seating ' + layout);
+        // Telling the time: different times of the chosen kind, and the hour hand halfway on at half past.
+        const ct = clockTimes('quarter', seededRandom(8));
+        step(ct.length === 6 && new Set(ct.map(clockText)).size === 6 && ct.every(([h, m]) => h >= 1 && h <= 12 && m % 15 === 0) && clockTimes('hour', seededRandom(2)).every(t => t[1] === 0), 'clock times are different and of the chosen kind: ' + ct.map(clockText));
+        step(clockAngles([3, 30]).join() === '105,180' && clockAngles([12, 0]).join() === '0,0' && clockText([9, 5]) === '9:05', 'clock hands point where they should');
+        await made('#sheet-clock', () => { step(shownRow('#sheet-clock-level') && shownRow('#sheet-key') && !shownRow('#sheet-seat-layout'), 'telling the time asks which times'); },
+          pages => pages.length === 2 && pages[0].objects.filter(o => o.kbName === 'Clock').length === 6 && pages[0].objects.filter(o => o.kbName === 'Hour hand').length === 6 && pages[0].objects.filter(o => o.kbName === 'Time' && /_/.test(o.text)).length === 6 && pages[1].objects.filter(o => o.kbName === 'Answer' && /^\\d+:\\d\\d$/.test(o.text)).length === 6, 'Telling the time');
+        await made('#sheet-clock', () => { $('#sheet-clock-mode').value = 'draw'; $('#sheet-clock-level').value = 'five'; },
+          pages => pages.length === 2 && pages[0].objects.every(o => o.kbName !== 'Hour hand') && pages[0].objects.filter(o => o.kbName === 'Time' && /^\\d+:\\d\\d$/.test(o.text)).length === 6 && pages[1].objects.filter(o => o.kbName === 'Minute hand').length === 6, 'Draw the hands');
         $('#sheet-math').click(); step(!shownRow('#sheet-maze-size') && !shownRow('#sheet-count-upto') && shownRow('#sheet-key'), 'Math practice hides the preschool choices'); $('#sheet-close').click();
       }
       $('#sheet-key').checked = true;
