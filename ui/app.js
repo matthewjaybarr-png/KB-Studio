@@ -947,7 +947,7 @@ const deliverForm = () => ({
   which: deliverBox.querySelector('[name=deliver-which]:checked')?.value || 'all',
   size: $('#deliver-size').value, quality: +$('#deliver-quality').value, names: $('#deliver-names').value,
   client: $('#deliver-client').value.trim(), folder: deliverBox.dataset.folder || null,
-  watermark: $('#deliver-watermark').checked, mark: markText()
+  watermark: $('#deliver-watermark').checked, mark: markText(), copyright: $('#deliver-copyright').value.trim()
 });
 // The photos to deliver, in shoot order.
 function deliverList(which) {
@@ -989,6 +989,7 @@ function openDeliver() {
   deliverBox.dataset.folder = typeof s.folder === 'string' ? s.folder : '';
   $('#deliver-watermark').checked = !!s.watermark;
   $('#deliver-mark').value = typeof s.mark === 'string' ? s.mark : localStorage.getItem('deliver-mark') || 'PROOF';
+  $('#deliver-copyright').value = typeof s.copyright === 'string' ? s.copyright : localStorage.getItem('deliver-copyright') || '';
   $('#deliver-progress').textContent = ''; $('#deliver-progress').classList.remove('error');
   $('#deliver-ask').hidden = true;
   paintDeliver();
@@ -1027,8 +1028,8 @@ function deliverJpeg(image, s) {
 $('#deliver-go').onclick = async () => {
   const s = deliverForm(), list = deliverList(s.which), shoot = dir, folder = deliverFolder(s), full = s.size === 'full';
   if (!list.length || delivering) return;
-  deliverSettings = { size: s.size, quality: s.quality, names: s.names, client: s.client, folder: s.folder, watermark: s.watermark, mark: s.mark };
-  localStorage.setItem('deliver-mark', s.mark);
+  deliverSettings = { size: s.size, quality: s.quality, names: s.names, client: s.client, folder: s.folder, watermark: s.watermark, mark: s.mark, copyright: s.copyright };
+  localStorage.setItem('deliver-mark', s.mark); localStorage.setItem('deliver-copyright', s.copyright);
   saveShoot();
   const progress = $('#deliver-progress'), run = delivering = { stop: false };
   progress.classList.remove('error');
@@ -1047,7 +1048,7 @@ $('#deliver-go').onclick = async () => {
       if (Math.max(w, h) > limit) throw `${photo.id} is ${w}×${h}; this computer's graphics can make photos up to ${limit} pixels across. Choose Web size`;
       exporter.setRaw(bytes, !!photo.raw);
       const jpeg = new Uint8Array(await (await deliverJpeg(exporter.pixels(recipe, full ? Infinity : WEB_EDGE), s)).arrayBuffer());
-      const save = replace => invoke('save_export', jpeg, { headers: { dir: encodeURIComponent(shoot), folder: encodeURIComponent(folder), name: encodeURIComponent(name), replace: String(replace) } });
+      const save = replace => invoke('save_export', jpeg, { headers: { dir: encodeURIComponent(shoot), folder: encodeURIComponent(folder), name: encodeURIComponent(name), copyright: encodeURIComponent(s.copyright), replace: String(replace) } });
       try { await save(!!replace); done++; } catch (error) {
         if (!String(error).endsWith('already exists')) throw error;
         if (replace === null) replace = await askReplace();

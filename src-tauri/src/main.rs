@@ -473,7 +473,6 @@ const ALREADY_EXISTS: &str = "already exists";
 
 /// Write one delivered JPEG to `folder` (absolute, created if missing) as `name`. Never into the
 /// shoot folder itself or our state, so originals and edits can't be overwritten.
-// ponytail: no copyright EXIF; add if asked
 fn write_export(dir: &str, folder: &str, name: &str, replace: bool, jpeg: &[u8]) -> Result<(), String> {
     let lower = name.to_ascii_lowercase();
     if name.starts_with('.') || Path::new(name).file_name() != Some(name.as_ref()) || !lower.ends_with(".jpg") || lower.len() <= 4 {
@@ -499,6 +498,44 @@ fn write_export(dir: &str, folder: &str, name: &str, replace: bool, jpeg: &[u8])
     write_atomic(&path, jpeg)
 }
 
+/// `jpeg` with an EXIF block whose only tag is Copyright, placed after a JFIF header if there is
+/// one. An empty `text` leaves the file as it was.
+fn with_copyright(jpeg: &[u8], text: &str) -> Result<Vec<u8>, String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(jpeg.to_vec());
+    }
+    if jpeg.len() < 4 || jpeg[..2] != [0xFF, 0xD8] {
+        return Err("not a JPEG".into());
+    }
+    if text.len() > 1000 || text.contains('\0') {
+        return Err("the copyright text is too long".into());
+    }
+    let mut value = text.as_bytes().to_vec();
+    value.push(0);
+    let count = value.len() as u32;
+    // TIFF header, one IFD entry (tag 0x8298, ASCII), no next IFD; values over 4 bytes follow at offset 26.
+    let mut tiff = b"II*\0\x08\0\0\0\x01\0\x98\x82\x02\0".to_vec();
+    tiff.extend_from_slice(&count.to_le_bytes());
+    if value.len() <= 4 {
+        value.resize(4, 0);
+        tiff.extend_from_slice(&value);
+        tiff.extend_from_slice(&[0; 4]);
+    } else {
+        tiff.extend_from_slice(&26u32.to_le_bytes());
+        tiff.extend_from_slice(&[0; 4]);
+        tiff.extend_from_slice(&value);
+    }
+    let length = (2 + 6 + tiff.len()) as u16;
+    let mut app1 = vec![0xFF, 0xE1];
+    app1.extend_from_slice(&length.to_be_bytes());
+    app1.extend_from_slice(b"Exif\0\0");
+    app1.extend_from_slice(&tiff);
+    let at = if jpeg[2..4] == [0xFF, 0xE0] && jpeg.len() >= 6 { 4 + u16::from_be_bytes([jpeg[4], jpeg[5]]) as usize } else { 2 };
+    let at = at.min(jpeg.len());
+    Ok([&jpeg[..at], &app1, &jpeg[at..]].concat())
+}
+
 /// A delivered JPEG as the raw request body, with the other arguments as percent-encoded
 /// headers (so a large file isn't sent as a JSON array).
 #[tauri::command]
@@ -511,7 +548,9 @@ async fn save_export(request: tauri::ipc::Request<'_>) -> Result<(), String> {
         percent_decode(value).ok_or(format!("save_export: bad {key}"))
     };
     let (dir, folder, name, replace) = (arg("dir")?, arg("folder")?, arg("name")?, arg("replace")? == "true");
-    let jpeg = jpeg.clone();
+    // Optional, so an older page without the header still delivers.
+    let copyright = arg("copyright").unwrap_or_default();
+    let jpeg = with_copyright(jpeg, &copyright)?;
     tauri::async_runtime::spawn_blocking(move || write_export(&dir, &folder, &name, replace, &jpeg))
         .await
         .map_err(|e| e.to_string())?
@@ -1918,6 +1957,35 @@ mod tests {
         bad.size = f64::NAN;
         assert!(export_pixels(&d, "IMG_1.JPG", &[bad], true).is_err());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn delivered_jpegs_carry_the_copyright_in_exif() {
+        use image::ImageEncoder;
+        let mut plain = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut plain, 90)
+            .write_image(&[200; 4 * 3 * 3], 4, 3, image::ExtendedColorType::Rgb8)
+            .unwrap();
+        assert_eq!(with_copyright(&plain, "  ").unwrap(), plain, "no copyright leaves the file alone");
+        assert!(with_copyright(b"not a jpeg", "x").is_err());
+        assert!(with_copyright(&plain, &"x".repeat(1001)).is_err());
+        for text in ["© 2026 Test Studio", "Me"] {
+            let out = with_copyright(&plain, text).unwrap();
+            assert_eq!(image::load_from_memory(&out).unwrap().width(), 4, "still a JPEG");
+            // After the JFIF header, if any.
+            let at = if plain[2..4] == [0xFF, 0xE0] { 4 + u16::from_be_bytes([plain[4], plain[5]]) as usize } else { 2 };
+            assert_eq!(&out[at..at + 2], &[0xFF, 0xE1]);
+            assert_eq!(&out[at + 4..at + 10], b"Exif\0\0");
+            let tiff = &out[at + 10..];
+            assert_eq!(&tiff[10..12], &[0x98, 0x82], "Copyright tag");
+            let count = u32::from_le_bytes(tiff[14..18].try_into().unwrap()) as usize;
+            assert_eq!(count, text.len() + 1);
+            let value = if count <= 4 { &tiff[18..18 + count] } else { &tiff[26..26 + count] };
+            assert_eq!(&value[..text.len()], text.as_bytes());
+            assert_eq!(value[text.len()], 0);
+            let length = u16::from_be_bytes([out[at + 2], out[at + 3]]) as usize;
+            assert_eq!(&out[at + 2 + length..], &plain[at..], "the rest of the file is unchanged");
+        }
     }
 
     #[test]

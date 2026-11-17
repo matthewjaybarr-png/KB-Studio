@@ -814,7 +814,7 @@ const test = `<script>
     set($('#deliver-client'), ' Smith & Wedding! ');
     step($('#deliver-preview').textContent.startsWith('Smith-Wedding-0001.jpg, Smith-Wedding-0002.jpg'), () => 'names are filename safe: ' + $('#deliver-preview').textContent);
     step($('#deliver-folder').textContent.replaceAll('\u200e', '') === dir + '/Delivered/Smith-Wedding', () => 'default folder: ' + $('#deliver-folder').textContent);
-    set($('#deliver-size'), 'web'); set($('#deliver-quality'), '80'); set($('#deliver-watermark'), true); set($('#deliver-mark'), 'PROOF');
+    set($('#deliver-size'), 'web'); set($('#deliver-quality'), '80'); set($('#deliver-watermark'), true); set($('#deliver-mark'), 'PROOF'); set($('#deliver-copyright'), ' © 2026 Test Studio ');
     step($('#deliver-quality-value').textContent === '80', 'quality shows its value');
     delivered[dir + '/Delivered/Smith-Wedding/Smith-Wedding-0002.jpg'] = new Uint8Array(1);
     $('#deliver-go').click();
@@ -825,6 +825,7 @@ const test = `<script>
     step($('#deliver-progress').textContent.includes('1 already there, skipped'), 'and says what it skipped');
     const exports = calls.filter(c => c.command === 'save_export');
     step(exports.length === want && exports.every(c => decodeURIComponent(c.options.headers.folder) === dir + '/Delivered/Smith-Wedding'), 'one save per photo, into the client folder');
+    step(exports.every(c => decodeURIComponent(c.options.headers.copyright) === '© 2026 Test Studio') && localStorage.getItem('deliver-copyright') === '© 2026 Test Studio', 'each file is sent with the copyright, and it is remembered');
     step(calls.filter(c => c.command === 'export_source').every(c => c.args.full === false), 'web size asks for a smaller source');
     const first = delivered[dir + '/Delivered/Smith-Wedding/Smith-Wedding-0001.jpg'];
     step(first && first[0] === 0xff && first[1] === 0xd8, 'the files are JPEGs');
