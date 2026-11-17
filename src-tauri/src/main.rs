@@ -853,6 +853,19 @@ async fn relight_picture(request: tauri::ipc::Request<'_>) -> Result<Response, S
         .map_err(|e| e.to_string())?
 }
 
+/// Fix blur in Edit a photo: the body is retouch_picture's and `amount` 0–100 is the slider. Returns the new RGBA.
+#[tauri::command]
+async fn deblur_picture(request: tauri::ipc::Request<'_>) -> Result<Response, String> {
+    let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
+        return Err("deblur_picture needs the picture as its body".into());
+    };
+    let amount = header(&request, "amount")?.parse::<f32>().map_err(|_| "bad amount")? / 100.0;
+    let (w, h, rgba) = picture_body(body, 0)?;
+    tauri::async_runtime::spawn_blocking(move || Ok(Response::new(effects::deblur(w, h, &rgba, amount))))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// What Stretch's Keep people steers seams around: the main thing in the picture (Cut out's Select subject, so a
 /// person's clothes count too, not only their skin) and any skin tones elsewhere.
 fn carve_protection(w: usize, h: usize, rgba: &[u8], img: &[f32]) -> Vec<f32> {
@@ -1492,7 +1505,7 @@ fn main() {
             save_thumb,
             retouch_picture,
             select_picture,
-            cutout_picture, straighten_picture, find_picture_corners, reshape_picture, blur_picture_background, red_eye_picture, see_through_picture, find_scan_photos, carve_picture, effect_picture, relight_picture, find_faces, face_tones, backup_designs, pick_backup, restore_backup,
+            cutout_picture, straighten_picture, find_picture_corners, reshape_picture, blur_picture_background, red_eye_picture, see_through_picture, find_scan_photos, carve_picture, effect_picture, relight_picture, deblur_picture, find_faces, face_tones, backup_designs, pick_backup, restore_backup,
             load_shoot,
             save_shoot,
             develop_source,

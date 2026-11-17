@@ -130,7 +130,7 @@ window.__TAURI__ = { core: { Channel: class { onmessage() {} }, invoke: async (c
   if (command === 'red_eye_picture') { const b = new ArrayBuffer(32); new Uint32Array(b, 0, 4).set([0, 0, 2, 2]); new Uint8Array(b, 16).set([40, 40, 40, 255, 40, 40, 40, 255, 40, 40, 40, 255, 40, 40, 40, 255]); return b; }
   if (command === 'find_faces') return window.mockFaces || [{ score: 0.9, rect: [20, 10, 40, 40], landmarks: [[32, 25], [48, 25], [40, 33], [33, 42], [47, 42]] }];
   if (command === 'face_tones') { const v = new DataView(args.buffer, args.byteOffset), w = v.getUint32(0, true), h = v.getUint32(4, true), out = new Uint8Array(w * h * 4); for (let i = 0; i < out.length; i += 4) out.set([args[8 + i], args[9 + i] + 10, args[10 + i], 255], i); return out.buffer; }
-  if (command === 'effect_picture' || command === 'relight_picture') { const v = new DataView(args.buffer, args.byteOffset), w = v.getUint32(0, true), h = v.getUint32(4, true), out = new Uint8Array(w * h * 4), k = command === 'effect_picture' ? 10 : 20; for (let i = 0; i < out.length; i += 4) out.set([args[8 + i] + k, args[9 + i], args[10 + i], 255], i); return out.buffer; }
+  if (command === 'effect_picture' || command === 'relight_picture' || command === 'deblur_picture') { const v = new DataView(args.buffer, args.byteOffset), w = v.getUint32(0, true), h = v.getUint32(4, true), out = new Uint8Array(w * h * 4), k = command === 'effect_picture' ? 10 : command === 'deblur_picture' ? 5 : 20; for (let i = 0; i < out.length; i += 4) out.set([args[8 + i] + k, args[9 + i], args[10 + i], 255], i); return out.buffer; }
   if (command === 'carve_picture') { const w = +options.headers.width, h = +options.headers.height, b = new ArrayBuffer(8 + w * h * 4); new Uint32Array(b, 0, 2).set([w, h]); const px = new Uint8Array(b, 8); for (let i = 0; i < px.length; i += 4) px.set([90, 60, 200, 255], i); return b; }
   if (command === 'find_scan_photos') return window.scanPhotos || [];
   if (command === 'find_picture_corners') return window.foundCorners || null;
@@ -3014,12 +3014,18 @@ const test = `<script>
       await until(() => !funFx.busy && calls.slice(before).some(c => c.command === 'relight_picture'), 'Relight');
       const lit = calls.slice(before).find(c => c.command === 'relight_picture');
       step(await red() === 130 && lit.options.headers.angle === '180' && lit.options.headers.amount === '60', 'a light goes on top of the effect:  (wrong colour)');
+      step($('#fun-sharp-out').textContent === 'off' && !calls.slice(before).some(c => c.command === 'deblur_picture'), 'Fix blur starts off');
+      const sharpOrder = calls.length; $('#fun-sharp').value = 40; $('#fun-sharp').dispatchEvent(new Event('input')); $('#fun-sharp').dispatchEvent(new Event('change'));
+      await until(() => !funFx.busy && calls.slice(sharpOrder).some(c => c.command === 'relight_picture'), 'Fix blur');
+      const sharpCalls = calls.slice(sharpOrder).map(c => c.command).filter(c => /_picture$/.test(c));
+      const sharpRed = await red();
+      step(Math.abs(sharpRed - 135) <= 1 && sharpCalls[0] === 'deblur_picture' && calls.slice(sharpOrder).find(c => c.command === 'deblur_picture').options.headers.amount === '40' && $('#fun-sharp-out').textContent === '40%', () => 'Fix blur goes first, under the effect and the light: ' + [sharpCalls, sharpRed, $('#fun-sharp-out').textContent, JSON.stringify(calls.slice(sharpOrder).find(c => c.command === 'deblur_picture').options.headers)]);
       $('#fun-back').click();
-      await until(() => !funFx.busy && !funFx.effect && !funFx.light, 'Back to the photo');
+      await until(() => !funFx.busy && !funFx.effect && !funFx.light && !funFx.sharp, 'Back to the photo');
       step(await red() === 100 && $('#fun-back').disabled, 'Back to the photo puts it back:  (wrong colour)');
       undoDesign(); await until(() => board.getObjects().find(o => o.kbName === 'Photo effects') && !board.getObjects().includes(pic), 'Undo');
       pic = board.getObjects().find(o => o.kbName === 'Photo effects'); selectObjects([pic]); paintFun();
-      step(await red() === 130 && !funFx.light && !funFx.base, 'Undo brings the lit picture back and starts afresh from it:  (wrong colour)');
+      step(await red() === sharpRed && !funFx.light && !funFx.base, 'Undo brings the lit picture back and starts afresh from it:  (wrong colour)');
       $('#fun-done').click();
       step(drawer !== 'retouch', 'Done puts Effects away');
       board.remove(board.getObjects().find(o => o.kbName === 'Photo effects')); commitDesign();

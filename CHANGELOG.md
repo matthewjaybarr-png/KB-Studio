@@ -7,6 +7,7 @@
 - Develop has an Auto button under Light: it sets exposure, contrast, highlights, shadows, whites and blacks to suit the photo. Undo takes it back.
 - Develop has a Tone curve: Darkest, Darks, Lights and Brightest bend their part of the curve, over a histogram of the edited photo. Edits that use it need this version or newer to open.
 - Create's Colours panel has Pick a colour from the page: click anywhere on the design to use that colour.
+- Create's Edit photo Effects tab has Fix blur: it firms up a slightly soft or out-of-focus photo. It can't fix camera shake or heavy blur.
 - Deliver has a Copyright field: the text is written into each delivered photo's details (EXIF).
 
 ## 1.0.0

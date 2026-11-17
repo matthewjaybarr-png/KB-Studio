@@ -54,6 +54,37 @@ pub fn effect(w: usize, h: usize, rgba: &[u8], effect: Effect, size: f32) -> Vec
     out
 }
 
+/// How many Richardson–Lucy rounds Fix blur runs: enough to firm up edges, few enough that noise stays down.
+const DEBLUR_ROUNDS: usize = 10;
+
+/// Fix blur: Richardson–Lucy deconvolution of the brightness, taking the photo to be blurred evenly by a soft, roughly
+/// Gaussian spot; `amount` 0–1 sets that spot from 0.8 to 4 pixels per 2,000 across. It firms up a slightly soft or
+/// out-of-focus photo but can't undo camera shake or heavy blur, and too much brings out noise and halos. The colour
+/// channels move by the brightness change, so colours stay as they were; alpha is kept.
+pub fn deblur(w: usize, h: usize, rgba: &[u8], amount: f32) -> Vec<u8> {
+    if amount <= 0.0 {
+        return rgba.to_vec();
+    }
+    const EPS: f32 = 1.0 / 255.0;
+    let sigma = (0.8 + 3.2 * amount.min(1.0)) * (w.max(h) as f32 / 2000.0).max(1.0);
+    let seen: Vec<f32> = rgba.as_chunks::<4>().0.iter().map(|p| luma(p) + EPS).collect();
+    let mut guess = seen.clone();
+    for _ in 0..DEBLUR_ROUNDS {
+        let blurred = soft(w, h, 1, &guess, sigma);
+        let ratio: Vec<f32> = seen.par_iter().zip(blurred.par_iter()).map(|(s, b)| (s / b.max(EPS)).clamp(0.5, 2.0)).collect();
+        let back = soft(w, h, 1, &ratio, sigma);
+        guess.par_iter_mut().zip(back.par_iter()).for_each(|(g, b)| *g = (*g * b).clamp(EPS, 1.0 + EPS));
+    }
+    let mut out = rgba.to_vec();
+    out.par_chunks_mut(4).zip(guess.par_iter().zip(seen.par_iter())).for_each(|(p, (g, s))| {
+        let lift = (g - s) * 255.0;
+        for c in &mut p[..3] {
+            *c = (*c as f32 + lift).round().clamp(0.0, 255.0) as u8;
+        }
+    });
+    out
+}
+
 fn luma(p: &[u8; 4]) -> f32 {
     (0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32) / 255.0
 }
@@ -340,6 +371,27 @@ pub fn relight(w: usize, h: usize, rgba: &[u8], lamp: Option<f32>, amount: f32, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deblur_brings_back_a_soft_edge_and_zero_changes_nothing() {
+        let (w, h) = (160, 100);
+        // Sharp grey blocks with coloured alpha-kept pixels, then softened the way deblur expects.
+        let sharp: Vec<u8> = (0..w * h)
+            .flat_map(|i| {
+                let (x, y) = (i % w, i / w);
+                let v = if (x / 20 + y / 20) % 2 == 0 { 60 } else { 190 };
+                [v, v, v, 200]
+            })
+            .collect();
+        let grey: Vec<f32> = sharp.as_chunks::<4>().0.iter().map(|p| p[0] as f32).collect();
+        let soft_grey = soft(w, h, 1, &grey, 0.8 + 3.2 * 0.5);
+        let blurry: Vec<u8> = soft_grey.iter().flat_map(|&v| { let v = v.round() as u8; [v, v, v, 200] }).collect();
+        let error = |img: &[u8]| img.as_chunks::<4>().0.iter().zip(sharp.as_chunks::<4>().0).map(|(a, b)| (a[0] as f32 - b[0] as f32).abs()).sum::<f32>() / (w * h) as f32;
+        let fixed = deblur(w, h, &blurry, 0.5);
+        assert!(error(&fixed) < 0.9 * error(&blurry), "deblurred {} vs blurry {}", error(&fixed), error(&blurry));
+        assert!(fixed.as_chunks::<4>().0.iter().all(|p| p[3] == 200 && p[0] == p[1] && p[1] == p[2]));
+        assert_eq!(deblur(w, h, &blurry, 0.0), blurry);
+    }
 
     /// A grey picture with a dark disc in the middle and a light top half.
     fn picture(w: usize, h: usize) -> Vec<u8> {
