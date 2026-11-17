@@ -3067,7 +3067,7 @@ const test = `<script>
       let pic = await settle(addImageBlob(await new Promise(r => c.toBlob(r, 'image/png')), 'effects'), 'a picture for effects');
       pic.set({ left: 100, top: 100, scaleX: 1, scaleY: 1, angle: 0 }); pic.setCoords(); commitDesign(); selectObjects([pic]); paintPanel();
       $('#prop-retouch').click(); $('#photo-tabs [data-photo-tab=effects]').click();
-      step(seen('#fun-list') && $('#fun-list').children.length === 4 && $('#light-dirs').children.length === 9 && $('#fun-back').disabled, 'Effects shows four effects, nine light directions, and nothing to go back to');
+      step(seen('#fun-list') && $('#fun-list').children.length === 5 && $('#fun-list [data-fun=poster]')?.textContent === 'Posterize' && $('#light-dirs').children.length === 9 && $('#fun-back').disabled, 'Effects shows five effects (Posterize too), nine light directions, and nothing to go back to');
       const red = async () => { const w = await touchPixels(pic.getSrc()); return w.ctx.getImageData(5, 5, 1, 1).data[0]; };
       const before = calls.length;
       $('#fun-list [data-fun=oil]').click();

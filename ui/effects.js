@@ -1,9 +1,9 @@
-// Effects, the sixth tab of Create's Edit photo drawer: fun effects (oil paint, pop-art dots, mosaic, pencil sketch)
+// Effects, the sixth tab of Create's Edit photo drawer: fun effects (oil paint, pop-art dots, mosaic, pencil sketch, posterize)
 // Fix blur and Relight, all from Rust's effects.rs. Each change redraws the picture from how it was before any effect, so
 // clicking another effect or another light replaces the last one instead of piling up, and Back to the photo puts it
 // back. Masks and adjusted parts stay as they are, since the size doesn't change. Needs create.js and phototools.js.
 
-const FUN_EFFECTS = [['oil', 'Oil paint'], ['dots', 'Pop-art dots'], ['mosaic', 'Mosaic'], ['sketch', 'Pencil sketch']];
+const FUN_EFFECTS = [['oil', 'Oil paint'], ['dots', 'Pop-art dots'], ['mosaic', 'Mosaic'], ['sketch', 'Pencil sketch'], ['poster', 'Posterize']];
 // Where the lamp is, as a 3 × 3 grid around the picture: degrees (0 from the right, 90 from above), or the front.
 const LIGHT_DIRS = [['135', '↖', 'From the top left'], ['90', '↑', 'From above'], ['45', '↗', 'From the top right'], ['180', '←', 'From the left'], ['front', '●', 'From the front'], ['0', '→', 'From the right'], ['225', '↙', 'From the bottom left'], ['270', '↓', 'From below'], ['315', '↘', 'From the bottom right']];
 const funFx = { image: null, base: null, effect: null, light: null, sharp: 0, size: 50, amount: 60, even: 0, warmth: 0, busy: false, again: false };

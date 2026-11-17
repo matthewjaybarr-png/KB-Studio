@@ -21,6 +21,7 @@ pub enum Effect {
     Dots,
     Mosaic,
     Sketch,
+    Poster,
 }
 
 impl Effect {
@@ -30,6 +31,7 @@ impl Effect {
             "dots" => Effect::Dots,
             "mosaic" => Effect::Mosaic,
             "sketch" => Effect::Sketch,
+            "poster" => Effect::Poster,
             _ => return None,
         })
     }
@@ -47,6 +49,7 @@ pub fn effect(w: usize, h: usize, rgba: &[u8], effect: Effect, size: f32) -> Vec
         Effect::Dots => dots(w, h, rgba, (long / (160.0 - 120.0 * size)).max(4.0)),
         Effect::Mosaic => mosaic(w, h, rgba, ((long / (120.0 - 90.0 * size)).round() as usize).max(3)),
         Effect::Sketch => sketch(w, h, rgba, (long / (500.0 - 380.0 * size)).max(1.0)),
+        Effect::Poster => poster(rgba, (8.0 - 6.0 * size).round() as u32),
     };
     for (o, i) in out.as_chunks_mut::<4>().0.iter_mut().zip(rgba.as_chunks::<4>().0.iter()) {
         o[3] = i[3];
@@ -262,6 +265,13 @@ fn dots(w: usize, h: usize, rgba: &[u8], cell: f32) -> Vec<u8> {
     out
 }
 
+/// Posterize, as Photoshop's: each colour channel keeps only `levels` evenly spaced values (2 at the biggest Size, 8 at the smallest).
+fn poster(rgba: &[u8], levels: u32) -> Vec<u8> {
+    let step = 255.0 / (levels - 1) as f32;
+    let table: Vec<u8> = (0..=255u32).map(|v| ((v as f32 / step).round() * step).round() as u8).collect();
+    rgba.iter().map(|&v| table[v as usize]).collect()
+}
+
 fn mosaic(w: usize, h: usize, rgba: &[u8], tile: usize) -> Vec<u8> {
     let (tw, th) = (w.div_ceil(tile), h.div_ceil(tile));
     let mut means = vec![[0f32; 3]; tw * th];
@@ -411,7 +421,7 @@ mod tests {
     fn every_effect_keeps_size_and_alpha() {
         let (w, h) = (161, 97);
         let src = picture(w, h);
-        for e in [Effect::Oil, Effect::Dots, Effect::Mosaic, Effect::Sketch] {
+        for e in [Effect::Oil, Effect::Dots, Effect::Mosaic, Effect::Sketch, Effect::Poster] {
             let out = effect(w, h, &src, e, 0.5);
             assert_eq!(out.len(), src.len(), "{e:?}");
             assert!(out.as_chunks::<4>().0.iter().zip(src.as_chunks::<4>().0.iter()).all(|(o, i)| o[3] == i[3]), "{e:?} keeps alpha");
@@ -460,6 +470,15 @@ mod tests {
     }
 
     #[test]
+    fn poster_keeps_only_a_few_levels() {
+        let (w, h) = (256, 1);
+        let src: Vec<u8> = (0..w).flat_map(|v| [v as u8, v as u8, 255 - v as u8, 255]).collect();
+        let levels = |size| { let out = effect(w, h, &src, Effect::Poster, size); let mut seen: Vec<u8> = out.as_chunks::<4>().0.iter().map(|p| p[0]).collect(); seen.dedup(); seen };
+        assert_eq!(levels(1.0), vec![0, 255], "the biggest Size leaves two levels");
+        assert_eq!(levels(0.0).len(), 8, "the smallest leaves eight");
+    }
+
+    #[test]
     fn relight_brightens_the_side_facing_the_lamp() {
         // a soft bright hill in the middle: lit from the left, its left slope gets lighter than its right
         let (w, h) = (240, 240);
@@ -487,7 +506,7 @@ mod tests {
     fn big_photos_are_quick() {
         let (w, h) = (4000, 3000);
         let src = picture(w, h);
-        for e in [Effect::Oil, Effect::Dots, Effect::Mosaic, Effect::Sketch] {
+        for e in [Effect::Oil, Effect::Dots, Effect::Mosaic, Effect::Sketch, Effect::Poster] {
             let t = std::time::Instant::now();
             effect(w, h, &src, e, 1.0);
             eprintln!("{e:?}: {:?}", t.elapsed());

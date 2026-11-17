@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Create's Edit photo Effects tab has Posterize: the photo keeps only a few flat colour levels, from eight at the smallest Size to two at the biggest.
 - Create's picture Filters have Duotone: shadows and highlights become two colours. Pick one of six pairs or choose your own Shadows and Highlights colours; None takes it off and keeps any look.
 
 ## 1.1.0
