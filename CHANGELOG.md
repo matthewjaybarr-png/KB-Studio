@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Develop has a Colour mixer: pick one of eight colours (red to magenta) and change its hue, saturation and brightness without touching the other colours or greys. "Reset colour mixer" clears it. Edits made with it need this version or newer to open.
+- Develop has Presence: Texture brings out (or smooths) fine detail, Clarity adds punch to midtones, and Dehaze cuts through haze or adds a soft veil. Edits that use them need this version or newer to open.
 
 ## 1.0.0
 

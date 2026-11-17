@@ -18,6 +18,9 @@ const SLIDERS = [
   { key: 'shadows', label: 'Shadows', min: -100, max: 100, step: 1 },
   { key: 'whites', label: 'Whites', min: -100, max: 100, step: 1 },
   { key: 'blacks', label: 'Blacks', min: -100, max: 100, step: 1 },
+  { key: 'texture', label: 'Texture', group: 'Presence', min: -100, max: 100, step: 1 },
+  { key: 'clarity', label: 'Clarity', min: -100, max: 100, step: 1 },
+  { key: 'dehaze', label: 'Dehaze', min: -100, max: 100, step: 1 },
   { key: 'vibrance', label: 'Vibrance', group: 'Colour', min: -100, max: 100, step: 1 },
   { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1 },
   ...MIX_BANDS.flatMap(([band, name], i) => ['Hue', 'Saturation', 'Luminance'].map((what, j) => ({
@@ -34,7 +37,7 @@ const SLIDERS = [
   { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1 },
   { key: 'fade', label: 'Fade', min: 0, max: 100, step: 1 }
 ];
-const RECIPE_VERSION = 7;
+const RECIPE_VERSION = 8;
 const DETAIL_EDGE = 3072; // main.rs DEVELOP_EDGE: Develop's source is averaged down by the whole factor ceil(long side / this), which is also Detail's scale at full size
 const SETTINGS = [...SLIDERS.map(s => s.key), 'look']; // everything but retouch and crop: what copy, paste and presets carry
 
@@ -157,7 +160,7 @@ uniform float u_exposure, u_contrast, u_highlights, u_shadows, u_whites, u_black
 // The look, and the finishing that goes on any photo.
 uniform float u_look, u_mono, u_lookContrast, u_lookSat, u_fade, u_grain, u_vignette;
 uniform vec3 u_filter, u_lift, u_gamma, u_gain;
-uniform float u_detailScale, u_sharpen, u_sharpenMask, u_nrColour, u_nrLuma;
+uniform float u_detailScale, u_sharpen, u_sharpenMask, u_nrColour, u_nrLuma, u_texture, u_clarity, u_dehaze;
 uniform vec2 u_toneLo, u_toneHi, u_splitLo, u_splitHi, u_grainScale;
 // Colour mixer: per band hue (-1..1 = -30..30 degrees), saturation and luminance (-1..1), band centres in OkLab degrees.
 uniform bool u_mix; uniform float u_mixH[8], u_mixS[8], u_mixL[8], u_mixAt[8];
@@ -286,6 +289,27 @@ vec3 detail(vec2 uv) {
     float g = (target + 0.01) / (p0 + 0.01);
     c *= clamp(g * g, 0.5, 2.0);
   }
+  // Texture (fine detail, a ring 3 proxy pixels out) and Clarity (midtone local contrast, rings 12 and 24 out): the texel's
+  // perceptual luma pushed away from (or toward) its surroundings' average, as one gain on c so colour stays put.
+  if (u_texture != 0.0 || u_clarity != 0.0) {
+    float p0 = yp(c), target = p0;
+    if (u_texture != 0.0) {
+      float sum = 0.0;
+      for (int i = 0; i < 8; i++) { float a = float(i) * 0.7853982; sum += yp(box(uv + vec2(cos(a), sin(a)) * 3.0 * px)); }
+      target += (p0 - sum / 8.0) * u_texture * (u_texture > 0.0 ? 1.5 : 0.8);
+    }
+    if (u_clarity != 0.0) {
+      float sum = 0.0;
+      for (int i = 0; i < 16; i++) {
+        float a = float(i) * 0.7853982 + (i < 8 ? 0.0 : 0.3927);
+        sum += yp(box(uv + vec2(cos(a), sin(a)) * (i < 8 ? 24.0 : 12.0) * px));
+      }
+      float q = clamp(p0, 0.0, 1.0), mid = 4.0 * q * (1.0 - q); // easing off in deep shadows and bright highlights
+      target += (p0 - sum / 16.0) * u_clarity * (u_clarity > 0.0 ? 1.0 : 0.6) * mid;
+    }
+    float g = (max(target, 0.0) + 0.01) / (p0 + 0.01);
+    c *= clamp(g * g, 0.4, 2.5);
+  }
   return c;
 }
 
@@ -302,6 +326,14 @@ void main() {
   d += u_whites * 0.25 * d * d;
   d += u_blacks * 0.15 * (1.0 - d) * (1.0 - d);
   d = clamp(d, 0.0, 1.0);
+  // Dehaze: take away (or add) an even veil of light, then win back (or give up) the colour the veil hid. Greys stay grey.
+  if (u_dehaze != 0.0) {
+    float veil = u_dehaze * 0.12;
+    d = u_dehaze > 0.0 ? clamp((d - veil) / (1.0 - veil), 0.0, 1.0) : mix(d, vec3(0.82), -u_dehaze * 0.4);
+    vec3 lab = oklab(toLinear(d));
+    lab.yz *= 1.0 + u_dehaze * 0.35;
+    d = toSrgb(clamp(fromOklab(lab), 0.0, 1.0));
+  }
   if (u_vibrance != 0.0 || u_saturation != 0.0) {
     vec3 lab = oklab(toLinear(d));
     float chroma = length(lab.yz), hue = atan(lab.z, lab.y);
@@ -440,7 +472,7 @@ class Developer {
     gl.uniform2fv(u('u_splitLo'), tint([r.splitShadow, 0.08], r.split / 100));
     gl.uniform2fv(u('u_splitHi'), tint([r.splitHighlight, 0.08], r.split / 100));
     gl.uniform1f(u('u_detailScale'), detailScale(this.width, this.height));
-    for (const key of ['sharpen', 'sharpenMask', 'nrColour', 'nrLuma']) gl.uniform1f(u('u_' + key), r[key] / 100);
+    for (const key of ['sharpen', 'sharpenMask', 'nrColour', 'nrLuma', 'texture', 'clarity', 'dehaze']) gl.uniform1f(u('u_' + key), r[key] / 100);
     gl.uniform1f(u('u_fade'), Math.min(1, (look.fade || 0) * amount + r.fade / 100));
     gl.uniform1f(u('u_grain'), Math.min(1, (look.grain || 0) * amount + r.grain / 100));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

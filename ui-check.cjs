@@ -366,6 +366,22 @@ const test = `<script>
     const g = mixed({ greenL: -100 });
     step(moved(g, 3) > 4 && [0, 1, 2, 4].every(x => moved(g, x) === 0), 'green luminance moves only green');
     step(settingsOf({ redH: 20 }).redH === 20 && fullRecipe({}).magentaL === 0 && !isDefault(fullRecipe({ blueS: 5 })), 'mixer values copy with the settings, default to 0 and count as an edit');
+    // Presence: Texture and Clarity push an edge apart (or together) and leave flat areas alone; Dehaze deepens and colours, greys stay grey.
+    const box64 = []; for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) { const v = x >= 24 && x < 40 && y >= 24 && y < 40 ? 0.45 : 0.12; box64.push(v, v, v); }
+    dev.setRaw(rawImage(64, 64, box64), false);
+    const pres = recipe => Array.from(dev.pixels(recipe, 64).data), plainPres = pres({}), presAt = (d, x, y) => d[(y * 64 + x) * 4 + 1];
+    step(pres({ texture: 0, clarity: 0, dehaze: 0 }).every((v, i) => v === plainPres[i]), 'Presence at zero is bit-identical');
+    for (const k of ['texture', 'clarity']) {
+      const up = pres({ [k]: 100 }), down = pres({ [k]: -100 }), d = (a, x, y) => presAt(a, x, y) - presAt(plainPres, x, y);
+      step(d(up, 24, 32) > 3 && d(up, 23, 32) < -3 && d(down, 24, 32) < -2 && d(down, 23, 32) > 2 && Math.abs(d(up, 2, 2)) <= 1 && (k === 'clarity' || Math.abs(d(up, 32, 32)) <= 1),
+        k + ' sharpens or softens the edge and leaves flat areas (Clarity also lifts the small bright square as a whole) (' + [d(up, 24, 32), d(up, 23, 32), d(down, 24, 32), d(down, 23, 32), d(up, 2, 2), d(up, 32, 32)] + ')');
+    }
+    dev.setRaw(rawImage(2, 1, [0.2, 0.2, 0.2, 0.4, 0.15, 0.1]), false);
+    const haze = recipe => Array.from(dev.pixels(recipe, 2).data), chromaOf = p => Math.max(p[4], p[5], p[6]) - Math.min(p[4], p[5], p[6]);
+    const clear = haze({ dehaze: 100 }), hazy = haze({ dehaze: -100 }), unhazed = haze({});
+    step(clear[0] < unhazed[0] && hazy[0] > unhazed[0] && [clear, hazy].every(p => Math.max(p[0], p[1], p[2]) - Math.min(p[0], p[1], p[2]) <= 1) && chromaOf(clear) > chromaOf(unhazed) && chromaOf(hazy) < chromaOf(unhazed),
+      'dehaze deepens grey and colours up, negative adds haze, greys stay grey (' + [unhazed[0], clear[0], hazy[0], chromaOf(unhazed), chromaOf(clear), chromaOf(hazy)] + ')');
+    step(settingsOf({ clarity: 30 }).clarity === 30 && fullRecipe({}).dehaze === 0 && !isDefault(fullRecipe({ texture: 5 })), 'Presence copies with the settings, defaults to 0 and counts as an edit');
     dev.setRaw(rawImage(16, 16, Array.from(want).filter((_, i) => i % 4 !== 3).map(lin)), false);
     const spreadOf = recipe => { let m = 0; for (let i = 0; i < 256; i++) { const p = at(out(recipe), i % 16, i >> 4); m = Math.max(m, Math.max(...p) - Math.min(...p)); } return m; };
     step(spreadOf({ look: 'bw' }) <= 2, 'the black & white look is grey (spread ' + spreadOf({ look: 'bw' }) + ')');
@@ -474,6 +490,8 @@ const test = `<script>
     $('#mix-reset').click();
     await until(() => !savedRecipe('IMG_0001')?.greenS && $('#mix-reset').disabled && savedRecipe('IMG_0001')?.contrast === 30, 'Reset colour mixer clears only the bands');
     slide('greenS', 40);
+    slide('clarity', 25);
+    await until(() => savedRecipe('IMG_0001')?.clarity === 25 && savedRecipe('IMG_0001')?.greenS === 40, 'a Presence slider saves with the photo');
     press('\\\\');
     step($('#develop-caption').textContent.includes('Before'), 'holding the backslash key shows before');
     document.dispatchEvent(new KeyboardEvent('keyup', { key: '\\\\', bubbles: true }));
@@ -494,10 +512,10 @@ const test = `<script>
     slide('saturation', -100); press('Escape');
     await until(() => disk[dir + '/edited/IMG_0004.thumb'] && thumbs.get('IMG_0004') !== camera, 'its grid thumbnail becomes the edited look');
     await openShoot(dir);
-    step(recipes.IMG_0001?.exposure === 1 && recipes.IMG_0001.contrast === 30 && recipes.IMG_0001.greenS === 40 && grid.children[1].textContent.includes('Edited'), 'recipes survive reopening the shoot');
+    step(recipes.IMG_0001?.exposure === 1 && recipes.IMG_0001.contrast === 30 && recipes.IMG_0001.greenS === 40 && recipes.IMG_0001.clarity === 25 && grid.children[1].textContent.includes('Edited'), 'recipes survive reopening the shoot');
     await until(() => calls.some(c => c.command === 'edited' && c.args.id === 'IMG_0001' && c.args.thumb) && loading === 0 && !wanted.length, 'reopened grid uses edited thumbnails');
     move(1); press('d');
-    await until(() => editing?.ready && sliders.querySelector('[data-key="contrast"]').value === '30' && sliders.querySelector('[data-key="greenS"]').value === '40', 'the sliders show the saved recipe, colour mixer too');
+    await until(() => editing?.ready && sliders.querySelector('[data-key="contrast"]').value === '30' && sliders.querySelector('[data-key="greenS"]').value === '40' && sliders.querySelector('[data-key="clarity"]').value === '25', 'the sliders show the saved recipe, colour mixer and Presence too');
     $('#reset').click();
     await until(() => !savedRecipe('IMG_0001') && !disk[dir + '/edited/IMG_0001'] && !grid.children[1].textContent.includes('Edited'), 'Reset all goes back to the camera file');
 

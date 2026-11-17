@@ -96,7 +96,7 @@ function paintStrip() {
 }
 
 // ---- Develop's drawers: the settings panel shows one section at a time, chosen on the rail ----
-const SECTION_OF = { Presets: 'looks', Look: 'looks', 'Split toning': 'looks', 'White balance': 'adjust', Light: 'adjust', Colour: 'adjust', Detail: 'adjust', Finishing: 'adjust', Crop: 'crop', Retouch: 'retouch' };
+const SECTION_OF = { Presets: 'looks', Look: 'looks', 'Split toning': 'looks', 'White balance': 'adjust', Light: 'adjust', Presence: 'adjust', Colour: 'adjust', Detail: 'adjust', Finishing: 'adjust', Crop: 'crop', Retouch: 'retouch' };
 {
   let section = 'adjust';
   for (const el of sliders.children) {
