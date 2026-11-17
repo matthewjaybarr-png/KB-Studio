@@ -172,7 +172,14 @@ window.H = {
     }
     if (JOBS.includes('starters')) for (const name of await newPage.evalIn('H.starters()')) await run('starter:' + name, `H.starter(${J(name)}, ${WIDTH})`);
     if (JOBS.includes('items')) for (const [k, v] of await newPage.evalIn('H.items()')) await run('item:' + k + ':' + v, `H.item(${J(k)}, ${J(v)}, ${WIDTH})`);
-    if (JOBS.includes('sheets')) for (const kind of await newPage.evalIn('H.sheetKinds()')) await run('sheet:' + kind, `H.sheet(${J(kind)}, ${WIDTH})`);
+    if (JOBS.includes('sheets')) {
+      // A maker `main` doesn't have yet has nothing to be compared with; it is listed, not failed.
+      const oldKinds = await oldPage.evalIn('H.sheetKinds()');
+      for (const kind of await newPage.evalIn('H.sheetKinds()')) {
+        if (oldKinds.includes(kind)) await run('sheet:' + kind, `H.sheet(${J(kind)}, ${WIDTH})`);
+        else console.log('NEW  sheet:' + kind + ' (not in the old build, nothing to compare)');
+      }
+    }
     if (JOBS.includes('ops')) await run('ops', `H.ops(${WIDTH})`);
     if (JOBS.includes('exports')) await run('exports', `H.exports(${WIDTH})`);
     if (JOBS.includes('roundtrip')) {
