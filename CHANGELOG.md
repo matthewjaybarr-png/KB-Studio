@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Classroom's Puzzles and worksheets has Missing numbers, under Numbers: a number grid up to 10, 20, 30, 50 or 100 with a few, about half or most of the numbers left out to fill in, with an answer key.
 - Classroom's Puzzles and worksheets has a Memory game, under Games: 6, 9 or 12 pairs of cards to cut apart, matching the same picture, a picture and its word, a big and a small letter, or a number and that many dots.
 - Classroom's Puzzles and worksheets has Telling the time, under Numbers: six clock faces to read, or six times to draw the hands for, from o'clock only to every five minutes, with an answer key.
 - Classroom's Puzzles and worksheets has a Seating plan, under My class: a desk for each name from your class list, in rows, groups of four or six, a horseshoe or a circle, in list order or mixed up. Each desk drags as one piece; Ungroup it to change the name.

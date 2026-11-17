@@ -3315,6 +3315,12 @@ const test = `<script>
         await made('#sheet-memory', () => { $('#sheet-memory-what').value = 'numbers'; $('#sheet-memory-pairs').value = '9'; },
           pages => pages.length === 2 && pages[1].objects.filter(o => o.kbName === 'Card').length === 6 && pages[0].objects.filter(o => o.kbName === 'Dot').length === 21, 'Memory numbers');
         await made('#sheet-memory', () => { $('#sheet-memory-what').value = 'words'; $('#sheet-memory-pairs').value = '6'; }, pages => pages.length === 1 && pages[0].objects.filter(o => o.kbName === 'Square words').length === 6, 'Memory words');
+        // Missing numbers: the right share left out, in order, never the 1.
+        const mn = missingNumbers(100, 'few', seededRandom(5));
+        step(mn.length === 25 && new Set(mn).size === 25 && mn.every((n, i) => n >= 2 && n <= 100 && (!i || n > mn[i - 1])) && missingNumbers(10, 'most', seededRandom(5)).length === 8 && missingNumbers(20, 'half', seededRandom(5)).length === 10, 'missing numbers leaves out the chosen share: ' + mn);
+        await made('#sheet-missing', () => { step(shownRow('#sheet-missing-upto') && shownRow('#sheet-key') && !shownRow('#sheet-clock-level'), 'missing numbers asks how far and how many'); },
+          pages => pages.length === 2 && pages[0].objects.filter(o => o.kbName === 'Empty square').length === 10 && pages[0].objects.filter(o => o.kbName === 'Number').length === 10 && pages[0].objects.every(o => o.kbName !== 'Answer') && pages[1].objects.filter(o => o.kbName === 'Answer').length === 10, 'Missing numbers');
+        await made('#sheet-missing', () => { $('#sheet-missing-upto').value = '100'; $('#sheet-missing-share').value = 'most'; }, pages => pages[0].objects.filter(o => o.kbName === 'Empty square').length === 75 && pages[1].objects.filter(o => o.kbName === 'Answer' && o.text === '100').length <= 1, 'Missing numbers to 100');
         $('#sheet-math').click(); step(!shownRow('#sheet-maze-size') && !shownRow('#sheet-count-upto') && shownRow('#sheet-key'), 'Math practice hides the preschool choices'); $('#sheet-close').click();
       }
       $('#sheet-key').checked = true;

@@ -1,5 +1,5 @@
 // Classroom games and plans, in Classroom's Puzzles and worksheets: bingo cards (a different one for each child, with
-// calling cards to cut apart), memory game cards, a seating plan from a class list and telling the time. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
+// calling cards to cut apart), memory game cards, a seating plan from a class list, telling the time and missing numbers. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
 // Needs create.js, worksheets.js, preschool.js and posters.js.
 
 const plainLabel = name => picLabel(name).replace(/ \(.*\)$/, '');
@@ -172,6 +172,23 @@ async function memoryPages(title, pairs) {
   return pages;
 }
 
+// ---- Missing numbers: a number grid with gaps to fill in ----
+const MISSING_SHARE = { few: 0.25, half: 0.5, most: 0.75 };
+// Which of 1 to `upto` are left out, in order; 1 always stays to start them off.
+function missingNumbers(upto, share, rand) {
+  return shuffled(Array.from({ length: upto - 1 }, (_, i) => i + 2), rand).slice(0, Math.round(upto * (MISSING_SHARE[share] || 0.5))).sort((a, b) => a - b);
+}
+function missingPage(title, upto, missing, answers) {
+  const cols = upto <= 20 ? 5 : 10, cell = 720 / cols, gone = new Set(missing);
+  const parts = [...preHeader(answers ? keyTitle(title) : title), T('Fill in the missing numbers.', 48, 150, { width: 720, fontSize: 20, textAlign: 'center', fill: '#666666', kbName: 'Instructions' })];
+  for (let n = 1; n <= upto; n++) {
+    const x = 48 + ((n - 1) % cols) * cell, y = 200 + Math.floor((n - 1) / cols) * cell, out = gone.has(n);
+    parts.push(R(x, y, cell, cell, { fill: out ? '#ffffff' : '#ece4fb', stroke: '#9a86d6', strokeWidth: 2, kbName: out ? 'Empty square' : 'Square' }));
+    if (!out || answers) parts.push(fitText(String(n), x + 4, y, cell - 8, cell, { fontSize: cell * 0.46, fill: out ? SHEET_PINK : '#3a3a3a', kbName: out ? 'Answer' : 'Number' }));
+  }
+  return toPage(parts);
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
@@ -199,6 +216,11 @@ Object.assign(SHEET_KINDS, {
     async make(title, key, seed) {
       const pairs = memoryPairs($('#sheet-memory-what').value, +$('#sheet-memory-pairs').value, seededRandom(seed));
       return { pages: await memoryPages(title, pairs), note: `${pairs.length} pairs to cut apart. Print on card so the pictures don't show through.` };
+    } },
+  missing: { title: 'Missing numbers', words: false,
+    async make(title, key, seed) {
+      const upto = +$('#sheet-missing-upto').value, missing = missingNumbers(upto, $('#sheet-missing-share').value, seededRandom(seed));
+      return { pages: [missingPage(title, upto, missing, false), ...(key ? [missingPage(title, upto, missing, true)] : [])] };
     } }
 });
 const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; };
@@ -207,3 +229,4 @@ $('#sheet-bingo').onclick = () => { openSheet('bingo'); bingoWords(); };
 $('#sheet-seating').onclick = () => openSheet('seating');
 $('#sheet-clock').onclick = () => openSheet('clock');
 $('#sheet-memory').onclick = () => openSheet('memory');
+$('#sheet-missing').onclick = () => openSheet('missing');
