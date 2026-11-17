@@ -382,6 +382,18 @@ const test = `<script>
     step(clear[0] < unhazed[0] && hazy[0] > unhazed[0] && [clear, hazy].every(p => Math.max(p[0], p[1], p[2]) - Math.min(p[0], p[1], p[2]) <= 1) && chromaOf(clear) > chromaOf(unhazed) && chromaOf(hazy) < chromaOf(unhazed),
       'dehaze deepens grey and colours up, negative adds haze, greys stay grey (' + [unhazed[0], clear[0], hazy[0], chromaOf(unhazed), chromaOf(clear), chromaOf(hazy)] + ')');
     step(settingsOf({ clarity: 30 }).clarity === 30 && fullRecipe({}).dehaze === 0 && !isDefault(fullRecipe({ texture: 5 })), 'Presence copies with the settings, defaults to 0 and counts as an edit');
+    // Auto: a dark photo is brightened, a bright one darkened, a flat one given contrast; its middle lands near mid-grey.
+    const ramp = (lo, hi) => { const v = []; for (let i = 0; i < 256; i++) { const t = lo + (hi - lo) * (i % 16) / 15; v.push(t, t * 0.9, t * 0.8); } return v; };
+    const autoMiddle = r => { const d = dev.pixels(r, 16).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255; return s / (d.length / 4); };
+    dev.setRaw(rawImage(16, 16, ramp(0.002, 0.04)), false);
+    const darkAuto = autoLight(dev, {});
+    step(darkAuto.exposure > 1 && Math.abs(autoMiddle(darkAuto) - 0.45) < 0.12, 'Auto brightens a dark photo to mid-grey (' + JSON.stringify(darkAuto) + ', middle ' + autoMiddle(darkAuto).toFixed(2) + ')');
+    dev.setRaw(rawImage(16, 16, ramp(0.5, 1)), false);
+    const brightAuto = autoLight(dev, {});
+    step(brightAuto.exposure < 0 && Math.abs(autoMiddle(brightAuto) - 0.45) < 0.12, 'Auto darkens a bright photo (' + JSON.stringify(brightAuto) + ')');
+    dev.setRaw(rawImage(16, 16, ramp(0.15, 0.25)), false);
+    const flatAuto = autoLight(dev, {});
+    step(flatAuto.contrast > 10 && flatAuto.whites > 0 && flatAuto.blacks < 0 && LIGHT_KEYS.every(k => Number.isFinite(flatAuto[k])), 'Auto stretches a flat photo (' + JSON.stringify(flatAuto) + ')');
     dev.setRaw(rawImage(16, 16, Array.from(want).filter((_, i) => i % 4 !== 3).map(lin)), false);
     const spreadOf = recipe => { let m = 0; for (let i = 0; i < 256; i++) { const p = at(out(recipe), i % 16, i >> 4); m = Math.max(m, Math.max(...p) - Math.min(...p)); } return m; };
     step(spreadOf({ look: 'bw' }) <= 2, 'the black & white look is grey (spread ' + spreadOf({ look: 'bw' }) + ')');
@@ -483,6 +495,10 @@ const test = `<script>
     await until(() => savedRecipe('IMG_0001')?.contrast === 0 || savedRecipe('IMG_0001')?.contrast === undefined, 'double-clicking a slider resets it');
     ctrl('z');
     await until(() => savedRecipe('IMG_0001')?.contrast === 30, 'and that reset can be undone');
+    $('#auto').click();
+    await until(() => { const r = savedRecipe('IMG_0001'); return r && LIGHT_KEYS.some(k => r[k] !== (k === 'contrast' ? 30 : k === 'exposure' ? 1 : 0)); }, 'Auto sets the Light sliders and saves');
+    ctrl('z');
+    await until(() => savedRecipe('IMG_0001')?.contrast === 30 && savedRecipe('IMG_0001')?.exposure === 1, 'and Auto can be undone');
     $('#sliders .bands [data-band=green]').click();
     step(!sliders.querySelector('[data-key=greenS]').closest('label').hidden && sliders.querySelector('[data-key=redS]').closest('label').hidden, 'a colour mixer band shows its own three sliders');
     slide('greenS', 40);

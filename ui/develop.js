@@ -102,6 +102,34 @@ const isDefault = recipe => SLIDERS.every(s => recipe[s.key] === (s.default ?? 0
 // A recipe's settings without its retouch strokes and crop, which belong to one photo.
 const settingsOf = recipe => Object.fromEntries(SETTINGS.map(key => [key, fullRecipe(recipe)[key]]));
 
+// Auto: Light settings for the photo as the rest of its recipe shows it (Light itself at zero): exposure brings its
+// middle tones to mid-grey, then the other sliders open up crushed shadows, pull back clipped highlights and stretch a
+// flat picture toward black and white. Reads small renders, so it costs a handful of GPU passes.
+const LIGHT_KEYS = ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks'];
+function autoLight(dev, recipe) {
+  const base = { ...fullRecipe(recipe), ...Object.fromEntries(LIGHT_KEYS.map(k => [k, 0])) };
+  const lumas = exposure => {
+    const d = dev.pixels({ ...base, exposure }, 128).data, l = new Float32Array(d.length / 4);
+    for (let i = 0; i < l.length; i++) l[i] = (0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]) / 255;
+    return l.sort();
+  };
+  const at = (l, q) => l[Math.min(l.length - 1, Math.floor(q * l.length))];
+  const middle = l => (at(l, 0.5) + l.reduce((a, b) => a + b, 0) / l.length) / 2; // median and mean: a dark backdrop doesn't take over
+  let lo = -2.5, hi = 2.5;
+  for (let i = 0; i < 9; i++) { const mid = (lo + hi) / 2; if (middle(lumas(mid)) < 0.45) lo = mid; else hi = mid; }
+  const exposure = Math.round((lo + hi) / 2 * 20) / 20, l = lumas(exposure), q = p => at(l, p);
+  const cap = (v, m) => Math.round(Math.max(-m, Math.min(m, v))) || 0;
+  const clipped = l.filter(v => v > 0.97).length / l.length, spread = q(0.95) - q(0.05);
+  return {
+    exposure,
+    highlights: clipped > 0.005 ? cap(-clipped * 600 - 10, 80) : 0,
+    shadows: q(0.1) < 0.08 ? cap((0.08 - q(0.1)) * 600, 60) : 0,
+    whites: q(0.995) < 0.94 ? cap((0.94 - q(0.995)) * 300, 60) : 0,
+    blacks: q(0.005) > 0.03 ? cap(-(q(0.005) - 0.03) * 400, 60) : 0,
+    contrast: spread < 0.55 ? cap((0.55 - spread) * 120, 40) : spread > 0.9 ? cap(-(spread - 0.9) * 150, 30) : 0
+  };
+}
+
 // White balance relative to as shot: warmer adds red and removes blue, positive tint removes green (magenta).
 // Normalised so a neutral grey keeps its brightness. Exactly [1, 1, 1] at 0, 0.
 function whiteBalance(temp, tint) {

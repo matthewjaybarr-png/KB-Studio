@@ -234,6 +234,7 @@ sliders.insertAdjacentHTML('beforeend', `<h3>Presets</h3><div class="presets"><s
   <input id="preset-name" maxlength="60" placeholder="Preset name, then Enter" hidden>`);
 for (const s of SLIDERS) {
   if (s.group) sliders.insertAdjacentHTML('beforeend', `<h3>${s.group}</h3>`);
+  if (s.group === 'Light') sliders.insertAdjacentHTML('beforeend', '<button id="auto" type="button" title="Set the Light sliders for this photo">Auto</button>');
   if (s.group === 'Look') sliders.insertAdjacentHTML('beforeend', `<select id="look" aria-label="Look"><option value="">None</option>${
     [...new Set(LOOKS.map(l => l.group).filter(Boolean))].map(group => `<optgroup label="${group}"></optgroup>`).join('')}</select>`);
   if (s.group === 'Colour mixer') sliders.insertAdjacentHTML('beforeend', `<div class="bands">${MIX_BANDS.map(([band, name]) =>
@@ -772,6 +773,12 @@ sliders.addEventListener('dblclick', event => {
   commit(editing, was);
 });
 sliders.querySelector('.bands').onclick = event => { if (event.target.dataset.band) { mixBand = event.target.dataset.band; paintSliders(); } };
+$('#auto').onclick = () => {
+  if (!editing?.ready) return;
+  const was = editing.recipe;
+  editing.recipe = { ...was, ...autoLight(developer, was) };
+  commit(editing, was);
+};
 $('#mix-reset').onclick = () => {
   if (!editing) return;
   const was = editing.recipe;
