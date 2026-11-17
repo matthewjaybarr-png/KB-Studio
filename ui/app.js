@@ -203,7 +203,7 @@ function move(to) {
 // change and when you leave it, while its pixels are still on the GPU.
 let developer = null, editing = null, before = false, dragStart = null, frame = 0;
 const note = text => { $('#develop-note').textContent = text; $('#develop-note').hidden = !text; };
-const sameRecipe = (a, b) => SETTINGS.every(key => a[key] === b[key]) && a.retouch === b.retouch && sameCrop(a.crop, b.crop);
+const sameRecipe = (a, b) => SETTINGS.every(key => a[key] === b[key]) && a.retouch === b.retouch && a.masks === b.masks && sameCrop(a.crop, b.crop);
 
 // Everything that touches the open photo's pixels runs in order, one step at a time: loading a photo,
 // applying retouch strokes in Rust and patching them in, and reading the look to save. So the strokes
@@ -257,6 +257,14 @@ sliders.insertAdjacentHTML('beforeend', `<h3>Crop</h3><div class="crop"><button 
   <label title="Fixes lines that lean in, as when looking up at a building"><span>Vertical</span><output></output><input type="range" min="-100" max="100" step="1" value="0" data-crop="vertical"></label>
   <label title="Fixes lines that lean in from the side"><span>Horizontal</span><output></output><input type="range" min="-100" max="100" step="1" value="0" data-crop="horizontal"></label>
   <p id="crop-hint"></p><button id="crop-cancel-photo" type="button" hidden>Cancel crop</button><button id="crop-reset" type="button">Reset crop</button>`);
+sliders.insertAdjacentHTML('beforeend', `<h3>Local adjustments</h3><div class="tools">
+  <button type="button" data-mask-kind="linear" aria-pressed="false" title="Drag on the photo from where the change is strongest to where it fades out">Add gradient</button>
+  <button type="button" data-mask-kind="radial" aria-pressed="false" title="Drag on the photo from the centre of the circle outward">Add circle</button></div>
+  <select id="mask-list" aria-label="Masks"></select>
+  ${[['exposure', 'Light'], ['warmth', 'Warmth'], ['saturation', 'Saturation']].map(([key, label]) =>
+    `<label><span>${label}</span><output></output><input type="range" min="-100" max="100" step="1" value="0" data-mask="${key}"></label>`).join('')}
+  <label id="mask-invert"><span>Outside the circle</span><input type="checkbox"></label>
+  <p id="mask-hint"></p><button id="mask-delete" type="button">Delete mask</button>`);
 sliders.insertAdjacentHTML('beforeend', `<h3>Retouch</h3><div class="tools">${Object.entries(TOOLS).map(([key, label]) =>
   `<button type="button" data-tool="${key}">${label}</button>`).join('')}</div>
   <button id="develop-source" type="button" aria-pressed="false" hidden>Choose source</button>
@@ -320,6 +328,7 @@ function paintSliders() {
     input.previousElementSibling.textContent = (v > 0 ? '+' : '') + (input.dataset.crop === 'angle' ? v.toFixed(1) + '°' : v);
   }
   $('#aspect').value = aspect;
+  paintMasks();
   $('#crop').textContent = cropping ? 'Apply crop' : 'Crop';
   $('#crop').title = cropping ? 'Apply crop (Enter)' : 'Crop (R)';
   $('#crop-cancel-photo').hidden = !cropping;
@@ -406,6 +415,57 @@ function paintCurve() {
 }
 new ResizeObserver(draw).observe(canvas);
 
+// Local adjustments: the mask being edited (maskAt in the open photo's list), and the kind Add gradient or Add
+// circle is waiting to place. Dragging on the photo places a new mask, or the selected one again.
+let maskKind = null, maskAt = 0, maskDrag = null;
+const setMask = patch => { const e = editing; e.recipe = { ...e.recipe, masks: e.recipe.masks.map((m, i) => i === maskAt ? { ...m, ...patch } : m) }; };
+function paintMasks() {
+  const masks = editing?.recipe.masks || [], list = $('#mask-list');
+  maskAt = Math.max(0, Math.min(maskAt, masks.length - 1));
+  const m = masks[maskAt];
+  list.replaceChildren(...masks.map((k, i) => new Option(`${k.kind === 'linear' ? 'Gradient' : 'Circle'} ${i + 1}`, i)));
+  list.hidden = !masks.length; list.value = maskAt;
+  for (const input of sliders.querySelectorAll('[data-mask]')) {
+    const v = m?.[input.dataset.mask] || 0;
+    input.value = v; input.disabled = !m;
+    input.previousElementSibling.textContent = (v > 0 ? '+' : '') + v;
+  }
+  $('#mask-invert').hidden = m?.kind !== 'radial';
+  $('#mask-invert input').checked = !!m?.invert;
+  $('#mask-delete').hidden = !m;
+  for (const b of sliders.querySelectorAll('[data-mask-kind]')) {
+    b.classList.toggle('active', maskKind === b.dataset.maskKind); b.setAttribute('aria-pressed', maskKind === b.dataset.maskKind);
+    b.disabled = masks.length >= MASK_LIMIT;
+  }
+  stage.classList.toggle('masking', typeof railSection === 'string' && railSection === 'local' && !!(maskKind || m)); // photobar.js may not have run yet
+  $('#mask-hint').textContent = maskKind === 'linear' ? 'Drag on the photo from where the change is strongest to where it fades out.'
+    : maskKind === 'radial' ? 'Drag on the photo from the centre of the circle outward.'
+    : m ? 'Set Light, Warmth or Saturation for this mask. Drag on the photo to place it again.'
+    : 'Change part of the photo: add a gradient or a circle, then drag on the photo.';
+}
+// The selected mask over the photo: a gradient's start (solid) and end (dashed) lines, or a circle's full-effect and outer rings.
+function paintMask(g) {
+  const m = (maskDrag?.e || editing).recipe.masks[maskDrag ? maskDrag.index : maskAt];
+  if (!m) return;
+  const W = developer.width, H = developer.height, L = Math.max(W, H);
+  const line = (points, dash) => {
+    for (const [colour, width] of [['rgba(0,0,0,.6)', 3], ['#fff', 1]]) {
+      g.strokeStyle = colour; g.lineWidth = width; g.setLineDash(dash ? [6, 4] : []);
+      g.beginPath(); for (const p of points) g.lineTo(...developer.fromImage(p)); g.stroke();
+    }
+    g.setLineDash([]);
+  };
+  if (m.kind === 'linear') {
+    const px = -(m.y1 - m.y0) * H / W, py = (m.x1 - m.x0) * W / H, k = 1.5 / (Math.hypot(px, py) || 1); // across the gradient, in photo pixels
+    line([[m.x0 - px * k, m.y0 - py * k], [m.x0 + px * k, m.y0 + py * k]], false);
+    line([[m.x1 - px * k, m.y1 - py * k], [m.x1 + px * k, m.y1 + py * k]], true);
+    line([[m.x0, m.y0], [m.x1, m.y1]], true);
+  } else {
+    const ring = r => Array.from({ length: 65 }, (_, i) => [m.x + Math.cos(i * Math.PI / 32) * r * L / W, m.y + Math.sin(i * Math.PI / 32) * r * L / H]);
+    line(ring(m.r / 2), false); line(ring(m.r), true);
+  }
+}
+
 // The brush circle under the pointer, the stroke being painted, and a crosshair where it copies from
 // (joined to the brush by a dashed line while painting).
 function paintOverlay() {
@@ -417,6 +477,7 @@ function paintOverlay() {
   const e = editing, place = e?.ready && developer.placement();
   paintZoom();
   if (cropping && place) return paintCrop(g);
+  if (railSection === 'local' && place) return paintMask(g);
   if (!tool || !place || e.pickingSource) return;
   const ring = (x, y, r) => {
     for (const [colour, width] of [['rgba(0,0,0,.6)', 3], ['#fff', 1]]) { g.strokeStyle = colour; g.lineWidth = width; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke(); }
@@ -794,6 +855,35 @@ sliders.addEventListener('input', event => {
   editing.recipe = { ...editing.recipe, [key]: +event.target.value };
   paintSliders(); draw();
 });
+sliders.addEventListener('click', event => {
+  const b = event.target.closest('[data-mask-kind]');
+  if (!b) return;
+  b.blur(); maskKind = maskKind === b.dataset.maskKind ? null : b.dataset.maskKind; paintSliders(); draw();
+});
+sliders.addEventListener('input', event => {
+  const key = event.target.dataset.mask;
+  if (!key || !editing?.recipe.masks[maskAt]) return;
+  dragStart ||= editing.recipe;
+  setMask({ [key]: +event.target.value });
+  paintSliders(); draw();
+});
+sliders.addEventListener('dblclick', event => {
+  const key = event.target.dataset.mask;
+  if (!key || !editing?.recipe.masks[maskAt]) return;
+  const was = dragStart || editing.recipe;
+  dragStart = null; setMask({ [key]: 0 }); commit(editing, was);
+});
+$('#mask-list').onchange = event => { maskAt = +event.target.value; maskKind = null; paintSliders(); draw(); };
+$('#mask-invert input').onchange = event => {
+  if (!editing?.recipe.masks[maskAt]) return;
+  const was = editing.recipe; setMask({ invert: event.target.checked }); commit(editing, was);
+};
+$('#mask-delete').onclick = () => {
+  if (!editing?.recipe.masks[maskAt]) return;
+  const was = editing.recipe;
+  editing.recipe = { ...was, masks: was.masks.filter((_, i) => i !== maskAt) };
+  maskAt--; commit(editing, was);
+};
 sliders.addEventListener('change', () => { if (editing && dragStart) commit(editing, dragStart); dragStart = null; });
 sliders.addEventListener('dblclick', event => {
   const key = event.target.dataset.key;
@@ -855,6 +945,12 @@ stage.addEventListener('pointerdown', event => {
     if (grab) { cropping.drag = { grab, start: developer.toView(event.clientX, event.clientY), from: cropping.crop }; capture(event); }
     return;
   }
+  if (railSection === 'local') {
+    const at = developer.toImage(event.clientX, event.clientY), masks = e.recipe.masks, kind = maskKind || masks[maskAt]?.kind;
+    if (event.button !== 0 || !kind || !inside(at) || (maskKind && masks.length >= MASK_LIMIT)) return;
+    maskDrag = { e, was: e.recipe, at: at.map(round), kind, index: maskKind ? masks.length : maskAt, base: maskKind ? {} : masks[maskAt] };
+    return capture(event);
+  }
   const at = developer.toImage(event.clientX, event.clientY);
   if (event.button !== 0 || !tool || !inside(at) || !inside(developer.toView(event.clientX, event.clientY))) return;
   if (tool === 'redeye') { stroke = { e, tool, size: brush.size, strength: strengthOf(tool), points: [at.map(round)] }; capture(event); return draw(); }
@@ -879,6 +975,17 @@ stage.addEventListener('pointermove', event => {
     developer.pan(event.clientX - panning.x, event.clientY - panning.y);
     panning = { x: event.clientX, y: event.clientY };
   } else if (cropping?.drag) dragCrop(event.clientX, event.clientY);
+  else if (maskDrag) {
+    const d = maskDrag, at = developer.toImage(event.clientX, event.clientY).map(v => round(Math.min(2, Math.max(-1, v)))), [x, y] = d.at;
+    const W = developer.width, H = developer.height;
+    const m = { ...d.base, kind: d.kind, ...d.kind === 'linear' ? { x0: x, y0: y, x1: at[0], y1: at[1] } : { x, y, r: round(Math.hypot((at[0] - x) * W, (at[1] - y) * H) / Math.max(W, H)) } };
+    if (validMask(m)) {
+      const masks = [...d.was.masks];
+      masks[d.index] = cleanMask(m);
+      d.e.recipe = { ...d.was, masks }; d.moved = true; maskAt = d.index;
+      paintSliders();
+    }
+  }
   else if (cropping) stage.style.cursor = editing?.ready ? CURSORS[cropGrab(event.clientX, event.clientY)] || '' : '';
   else if (stroke?.tool === 'redeye') {
     // Dragging sets the circle's radius; a plain click keeps the brush size.
@@ -896,11 +1003,17 @@ stage.addEventListener('pointermove', event => {
 stage.addEventListener('mousedown', event => { if (event.button === 1) event.preventDefault(); }); // no autoscroll on middle-drag
 stage.addEventListener('pointerleave', () => { pointer = null; draw(); });
 stage.addEventListener('pointerup', finishStroke);
-stage.addEventListener('pointercancel', () => { stroke = panning = null; if (cropping) cropping.drag = null; draw(); });
+stage.addEventListener('pointercancel', () => { if (maskDrag) maskDrag.e.recipe = maskDrag.was; stroke = panning = maskDrag = null; if (cropping) cropping.drag = null; draw(); });
 
 async function finishStroke() {
   panning = null;
   if (cropping) { cropping.drag = null; return; }
+  if (maskDrag) {
+    const d = maskDrag;
+    maskDrag = null;
+    if (d.moved && editing === d.e) { maskKind = null; commit(d.e, d.was); }
+    return draw();
+  }
   const s = stroke;
   stroke = null;
   draw();

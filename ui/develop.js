@@ -64,7 +64,7 @@ const SLIDERS = [
   { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1 },
   { key: 'fade', label: 'Fade', min: 0, max: 100, step: 1 }
 ];
-const RECIPE_VERSION = 10;
+const RECIPE_VERSION = 11;
 const DETAIL_EDGE = 3072; // main.rs DEVELOP_EDGE: Develop's source is averaged down by the whole factor ceil(long side / this), which is also Detail's scale at full size
 const SETTINGS = [...SLIDERS.map(s => s.key), 'look']; // everything but retouch and crop: what copy, paste and presets carry
 
@@ -120,15 +120,29 @@ const validCrop = c => !!c && ['x', 'y', 'w', 'h', 'angle'].every(k => Number.is
   && c.x + c.w <= 1 + 1e-9 && c.y + c.h <= 1 + 1e-9 && Math.abs(c.angle) <= MAX_ANGLE && tilt(c.vertical) && tilt(c.horizontal);
 const sameCrop = (a, b) => CROP_KEYS.every(k => (a[k] || 0) === (b[k] || 0));
 
+// Local adjustments: up to 8 masks, each changing Light (exposure, ±2 stops at ±100), Warmth and Saturation
+// (−100–100) where it falls. Points are uv across the upright photo, as retouch strokes are, so a crop keeps them in
+// place. A gradient ('linear') has all of its effect at x0, y0 and none at x1, y1; a circle ('radial') at x, y with
+// radius r over the long edge has all of it inside half the radius, fading out to the edge, or outside if `invert`.
+// Copied rather than shared between photos, like the crop.
+const MASK_LIMIT = 8, MASK_KEYS = ['exposure', 'warmth', 'saturation'];
+const near = v => Number.isFinite(v) && v >= -1 && v <= 2;
+const validMask = m => !!m && MASK_KEYS.every(k => m[k] === undefined || (Number.isFinite(m[k]) && Math.abs(m[k]) <= 100))
+  && (m.kind === 'linear' ? [m.x0, m.y0, m.x1, m.y1].every(near) && Math.hypot(m.x1 - m.x0, m.y1 - m.y0) >= 0.001
+    : m.kind === 'radial' && near(m.x) && near(m.y) && Number.isFinite(m.r) && m.r >= 0.005 && m.r <= 3 && (m.invert === undefined || typeof m.invert === 'boolean'));
+const cleanMask = m => ({ kind: m.kind, ...Object.fromEntries((m.kind === 'linear' ? ['x0', 'y0', 'x1', 'y1'] : ['x', 'y', 'r']).map(k => [k, m[k]])),
+  ...m.kind === 'radial' && { invert: !!m.invert }, ...Object.fromEntries(MASK_KEYS.map(k => [k, m[k] || 0])) });
+
 // A saved recipe with any missing setting at its default, and nothing it doesn't know.
 const fullRecipe = (saved = {}) => ({
   ...Object.fromEntries(SLIDERS.map(s => [s.key, Number.isFinite(saved[s.key]) ? Math.min(s.max, Math.max(s.min, saved[s.key])) : s.default ?? 0])),
   look: lookOf(saved.look) ? saved.look : '',
   retouch: Array.isArray(saved.retouch) ? saved.retouch.filter(validStroke).slice(0, STROKE_LIMITS.strokes) : [],
-  crop: validCrop(saved.crop) ? Object.fromEntries(CROP_KEYS.map(k => [k, saved.crop[k] || 0])) : NO_CROP
+  crop: validCrop(saved.crop) ? Object.fromEntries(CROP_KEYS.map(k => [k, saved.crop[k] || 0])) : NO_CROP,
+  masks: Array.isArray(saved.masks) ? saved.masks.filter(validMask).slice(0, MASK_LIMIT).map(cleanMask) : []
 });
-const isDefault = recipe => SLIDERS.every(s => recipe[s.key] === (s.default ?? 0)) && !recipe.look && !recipe.retouch?.length && sameCrop(recipe.crop || NO_CROP, NO_CROP);
-// A recipe's settings without its retouch strokes and crop, which belong to one photo.
+const isDefault = recipe => SLIDERS.every(s => recipe[s.key] === (s.default ?? 0)) && !recipe.look && !recipe.retouch?.length && !recipe.masks?.length && sameCrop(recipe.crop || NO_CROP, NO_CROP);
+// A recipe's settings without its retouch strokes, masks and crop, which belong to one photo.
 const settingsOf = recipe => Object.fromEntries(SETTINGS.map(key => [key, fullRecipe(recipe)[key]]));
 
 // Auto: Light settings for the photo as the rest of its recipe shows it (Light itself at zero): exposure brings its
@@ -231,6 +245,7 @@ uniform vec2 u_toneLo, u_toneHi, u_splitLo, u_splitHi, u_grainScale;
 uniform bool u_curve; uniform float u_curveY[6], u_curveM[6];
 // Colour mixer: per band hue (-1..1 = -30..30 degrees), saturation and luminance (-1..1), band centres in OkLab degrees.
 uniform bool u_mix; uniform float u_mixH[8], u_mixS[8], u_mixL[8], u_mixAt[8];
+uniform int u_masks; uniform vec4 u_maskGeo[8]; uniform float u_maskKind[8], u_maskSat[8]; uniform vec3 u_maskGain[8]; uniform vec2 u_aspect;
 in vec2 v_uv; in vec3 v_src; out vec4 color;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
@@ -392,6 +407,17 @@ void main() {
   vec2 margin = 0.5 / vec2(textureSize(u_src, 0)), src = v_src.xy / v_src.z; // divided here, so a perspective stays straight
   if (any(lessThan(src, -margin)) || any(greaterThan(src, 1.0 + margin))) { color = vec4(0.043, 0.047, 0.063, 1); return; }
   vec3 c = detail(src) * u_wb * u_exposure;
+  // Local adjustments, in linear light like exposure and white balance. Distances are in photo pixels over the long edge.
+  for (int i = 0; i < u_masks; i++) {
+    vec4 g = u_maskGeo[i];
+    vec2 p = src * u_aspect;
+    float w;
+    if (u_maskKind[i] == 0.0) { vec2 a = g.xy * u_aspect, d = g.zw * u_aspect - a; w = 1.0 - smoothstep(0.0, 1.0, dot(p - a, d) / dot(d, d)); }
+    else { w = 1.0 - smoothstep(0.5, 1.0, length(p - g.xy * u_aspect) / g.z); if (u_maskKind[i] == 2.0) w = 1.0 - w; }
+    c *= mix(vec3(1), u_maskGain[i], w);
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    c = max(mix(vec3(l), c, 1.0 + u_maskSat[i] * w), 0.0);
+  }
   vec3 d = clamp(u_raw ? baseLook(c) : toSrgb(c), 0.0, 1.0);
   // Tone, on display values. Each term is zero at 0 and keeps the curve rising.
   if (u_contrast != 0.0) d = contrast(d, u_contrast);
@@ -536,6 +562,13 @@ class Developer {
     gl.uniform1i(u('u_mix'), MIX_KEYS.some(k => r[k]) ? 1 : 0);
     for (const k of 'HSL') gl.uniform1fv(u('u_mix' + k), MIX_BANDS.map(([band]) => r[band + k] / 100));
     gl.uniform1fv(u('u_mixAt'), MIX_BANDS.map(b => b[2]));
+    const m = r.masks, pad = (list, n) => [...list.flat(), ...Array(8 * n - list.flat().length).fill(0)];
+    gl.uniform1i(u('u_masks'), m.length);
+    gl.uniform2f(u('u_aspect'), this.width / Math.max(this.width, this.height), this.height / Math.max(this.width, this.height));
+    gl.uniform4fv(u('u_maskGeo'), pad(m.map(k => k.kind === 'linear' ? [k.x0, k.y0, k.x1, k.y1] : [k.x, k.y, k.r, 0]), 4));
+    gl.uniform1fv(u('u_maskKind'), pad(m.map(k => k.kind === 'linear' ? 0 : k.invert ? 2 : 1), 1));
+    gl.uniform1fv(u('u_maskSat'), pad(m.map(k => k.saturation / 100), 1));
+    gl.uniform3fv(u('u_maskGain'), pad(m.map(k => whiteBalance(k.warmth, 0).map(v => v * 2 ** (k.exposure / 50))), 3));
     const look = lookOf(r.look) || {}, amount = look.id ? r.lookAmount / 100 : 0;
     const tint = ([hue, amount] = [0, 0], k = 1) => [k * amount * Math.cos(hue * Math.PI / 180), k * amount * Math.sin(hue * Math.PI / 180)];
     gl.uniform1f(u('u_look'), amount);

@@ -491,6 +491,15 @@ const test = `<script>
       'Vertical draws the top from less of the photo than the bottom, keeps the crop on it and inverts; old crops have none (' + JSON.stringify(keyed) + ')');
     const keyedPx = dev.pixels({ crop: keyed }, 16), flatPx = dev.pixels({ crop: { ...keyed, vertical: 0 } }, 16);
     step(worst(keyedPx.data, flatPx.data) > 0 && worst(dev.pixels({ crop: { ...NO_CROP, angle: 0 } }, 16).data, dev.pixels({}, 16).data) === 0, 'a perspective changes the render, and none leaves it as it was');
+    // Local adjustments: a circle darkens its middle and leaves the corners; Outside the circle swaps them; bad masks are dropped.
+    const ringMask = { kind: 'radial', x: 0.5, y: 0.5, r: 0.2, exposure: -100 }, maskBasePx = dev.pixels({}, 16).data;
+    const maskAt16 = (d, x, y) => d[(y * 16 + x) * 4 + 1], maskInPx = dev.pixels({ masks: [ringMask] }, 16).data, maskOutPx = dev.pixels({ masks: [{ ...ringMask, invert: true }] }, 16).data;
+    step(maskAt16(maskInPx, 8, 8) < maskAt16(maskBasePx, 8, 8) - 10 && maskAt16(maskInPx, 0, 0) === maskAt16(maskBasePx, 0, 0) && maskAt16(maskInPx, 15, 8) === maskAt16(maskBasePx, 15, 8) && maskAt16(maskOutPx, 8, 8) === maskAt16(maskBasePx, 8, 8) && maskAt16(maskOutPx, 15, 8) <= maskAt16(maskBasePx, 15, 8) && worst(maskOutPx, maskBasePx) > 10
+      && worst(dev.pixels({ masks: [] }, 16).data, maskBasePx) === 0,
+      'a circle mask changes inside it and not outside, Outside the circle the other way round, and no masks leave the render as it was (' + [maskAt16(maskInPx, 8, 8), maskAt16(maskBasePx, 8, 8), maskAt16(maskInPx, 15, 8), maskAt16(maskBasePx, 15, 8), maskAt16(maskOutPx, 15, 8), worst(maskOutPx, maskBasePx)] + ')');
+    step(fullRecipe({ masks: [ringMask, { kind: 'linear', x0: 0, y0: 0, x1: 0, y1: 0 }, { kind: 'radial', x: 0.5, y: 0.5, r: 0.2, exposure: 500 }, { kind: 'blob' }] }).masks.length === 1
+      && fullRecipe({ masks: [{ ...ringMask, extra: 1 }] }).masks[0].extra === undefined && !isDefault(fullRecipe({ masks: [ringMask] })) && settingsOf({ masks: [ringMask] }).masks === undefined
+      && fullRecipe({ masks: Array(9).fill(ringMask) }).masks.length === MASK_LIMIT, 'masks are checked, cleaned and capped, count as an edit and stay out of copied settings');
     step(fullRecipe({ look: 'not-a-look' }).look === '' && settingsOf({ exposure: 1, retouch: [{}] }).retouch === undefined, 'an unknown look is dropped; settings leave out strokes');
 
     // Develop: the view.
@@ -814,6 +823,29 @@ const test = `<script>
     await until(() => sameCrop(crop(), applied), 'and redo puts it back');
     $('#crop-reset').click();
     await until(() => sameCrop(crop(), NO_CROP), 'Reset crop clears it');
+    // Local adjustments: Add circle, drag it out on the photo, then set its Light; each is one undo step and saves.
+    $('#develop-rail [data-section="local"]').click();
+    sliders.querySelector('[data-mask-kind="radial"]').click();
+    step(maskKind === 'radial' && sliders.dataset.section === 'local' && $('.stage').classList.contains('masking') && sliders.querySelector('[data-mask="exposure"]').disabled, 'Add circle waits for a drag on the photo');
+    drag([screen([0.5, 0.5]), [screen([0.5, 0.5])[0] + 100, screen([0.5, 0.5])[1]]]);
+    await until(() => savedRecipe('IMG_0013')?.masks?.length === 1, 'dragging out a circle places it and saves it');
+    const placed = editing.recipe.masks[0];
+    step(placed.kind === 'radial' && close([placed.x, placed.y], [0.5, 0.5], 1e-3) && Math.abs(placed.r - 100 / (1600 * fit)) < 1e-3 && maskKind === null && $('#mask-list').options[0]?.text === 'Circle 1' && !$('#mask-invert').hidden,
+      'the circle sits where it was dragged out (' + JSON.stringify(placed) + ')');
+    const maskLight = sliders.querySelector('[data-mask="exposure"]');
+    maskLight.value = -60; maskLight.dispatchEvent(new Event('input', { bubbles: true })); maskLight.dispatchEvent(new Event('change', { bubbles: true }));
+    await until(() => savedRecipe('IMG_0013')?.masks?.[0]?.exposure === -60, 'Light changes the circle and saves');
+    step(maskLight.previousElementSibling.textContent === '-60', 'the Light value shows');
+    ctrl('z');
+    await until(() => editing.recipe.masks[0]?.exposure === 0, 'one Ctrl+Z takes back the Light');
+    ctrl('z');
+    await until(() => !editing.recipe.masks.length && $('#mask-list').hidden, 'and the next the circle');
+    ctrl('z', true);
+    await until(() => editing.recipe.masks.length === 1, 'redo puts the circle back');
+    $('#mask-delete').click();
+    await until(() => !savedRecipe('IMG_0013')?.masks?.length && $('#mask-delete').hidden, 'Delete mask removes it');
+    $('#develop-rail [data-section="adjust"]').click();
+    step(maskKind === null && !$('.stage').classList.contains('masking'), 'leaving Local drops the mask tool');
     press('Escape');
     step(develop.classList.contains('hidden') && !grid.classList.contains('hidden'), 'a second Esc goes to the grid');
     await until(() => disk[dir + '/edited/IMG_0013.thumb'], 'leaving saves the retouched look');
