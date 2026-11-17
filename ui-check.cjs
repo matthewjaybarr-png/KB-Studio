@@ -484,6 +484,13 @@ const test = `<script>
       'the crop map turns without shearing (positive turns the picture clockwise) and inverts');
     step(close(mapPoint(cropMap(NO_CROP, 3000, 2000), [0.25, 0.75]), [0.25, 0.75]) && fullRecipe({ crop: { x: 0.8, y: 0, w: 0.5, h: 1, angle: 0 } }).crop === NO_CROP && fullRecipe({ crop: { ...NO_CROP, angle: 50 } }).crop === NO_CROP
       && !isDefault(fullRecipe({ crop: tilted })) && settingsOf({ crop: tilted }).crop === undefined, 'no crop is the identity; a bad crop is dropped; a crop is an edit that copy leaves out');
+    // Perspective: Vertical keystones about the centre, the crop shrinks to stay on the photo, and older crops read as 0.
+    const keyed = fitCrop({ ...NO_CROP, vertical: 60 }, 3000, 2000), keyMap = cropMap(keyed, 3000, 2000), span = y => mapPoint(keyMap, [1, y])[0] - mapPoint(keyMap, [0, y])[0];
+    step(cropFits(keyed, 3000, 2000) && !cropFits(grow(keyed, 1.001), 3000, 2000) && span(0) < span(1) * 0.9 && close(unmapPoint(keyMap, mapPoint(keyMap, [0.3, 0.7])), [0.3, 0.7])
+      && fullRecipe({ crop: { x: 0, y: 0, w: 1, h: 1, angle: 0 } }).crop.vertical === 0 && fullRecipe({ crop: { ...NO_CROP, vertical: 150 } }).crop === NO_CROP && !isDefault(fullRecipe({ crop: { ...NO_CROP, horizontal: 5 } })),
+      'Vertical draws the top from less of the photo than the bottom, keeps the crop on it and inverts; old crops have none (' + JSON.stringify(keyed) + ')');
+    const keyedPx = dev.pixels({ crop: keyed }, 16), flatPx = dev.pixels({ crop: { ...keyed, vertical: 0 } }, 16);
+    step(worst(keyedPx.data, flatPx.data) > 0 && worst(dev.pixels({ crop: { ...NO_CROP, angle: 0 } }, 16).data, dev.pixels({}, 16).data) === 0, 'a perspective changes the render, and none leaves it as it was');
     step(fullRecipe({ look: 'not-a-look' }).look === '' && settingsOf({ exposure: 1, retouch: [{}] }).retouch === undefined, 'an unknown look is dropped; settings leave out strokes');
 
     // Develop: the view.
@@ -790,6 +797,11 @@ const test = `<script>
     angle.value = 5; angle.dispatchEvent(new Event('input', { bubbles: true }));
     step(cropping.crop.angle === 5 && cropFits(cropping.crop, 1600, 1200) && developer.crop.angle === 5 && sameCrop({ ...developer.crop, angle: 0 }, NO_CROP) && angle.previousElementSibling.textContent === '+5.0°', 'Straighten turns the photo and keeps the crop on it');
     angle.dispatchEvent(new Event('change', { bubbles: true }));
+    const upright = sliders.querySelector('[data-crop="vertical"]');
+    upright.value = 30; upright.dispatchEvent(new Event('input', { bubbles: true }));
+    step(cropping.crop.vertical === 30 && cropping.crop.angle === 5 && cropFits(cropping.crop, 1600, 1200) && developer.crop.vertical === 30 && upright.previousElementSibling.textContent === '+30' && sliders.querySelector('[data-crop="horizontal"]').value === '0',
+      'Vertical tilts the photo and keeps the crop on it (' + JSON.stringify(cropping.crop) + ')');
+    upright.dispatchEvent(new Event('change', { bubbles: true }));
     const applied = cropping.crop;
     press('Enter');
     await until(() => sameCrop(crop(), applied), 'Enter applies the crop and saves it');

@@ -64,7 +64,7 @@ const SLIDERS = [
   { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1 },
   { key: 'fade', label: 'Fade', min: 0, max: 100, step: 1 }
 ];
-const RECIPE_VERSION = 9;
+const RECIPE_VERSION = 10;
 const DETAIL_EDGE = 3072; // main.rs DEVELOP_EDGE: Develop's source is averaged down by the whole factor ceil(long side / this), which is also Detail's scale at full size
 const SETTINGS = [...SLIDERS.map(s => s.key), 'look']; // everything but retouch and crop: what copy, paste and presets carry
 
@@ -109,21 +109,23 @@ const validStroke = s => !!s && TOOLS[s.tool] && Number.isFinite(s.size) && s.si
   && (s.tool === 'soften' ? s.offset === undefined && (s.scaled === undefined || typeof s.scaled === 'boolean')
     : s.scaled === undefined && (NO_SOURCE[s.tool] ? s.offset === undefined : Array.isArray(s.offset) && s.offset.length === 2 && s.offset.every(v => Number.isFinite(v) && Math.abs(v) <= 1)));
 
-// Crop: a rectangle (x, y, w, h, 0–1) of the straightened photo, which is the upright photo turned
-// `angle` degrees clockwise about its centre (keeping its size), then cropped. Copied rather than shared
-// between photos, so it stays out of SETTINGS.
-const NO_CROP = { x: 0, y: 0, w: 1, h: 1, angle: 0 };
+// Crop: a rectangle (x, y, w, h, 0–1) of the straightened photo, which is the upright photo with its perspective
+// corrected (`vertical` and `horizontal`, −100–100, absent means 0), turned `angle` degrees clockwise about its centre
+// (keeping its size), then cropped. Copied rather than shared between photos, so it stays out of SETTINGS.
+const NO_CROP = { x: 0, y: 0, w: 1, h: 1, angle: 0, vertical: 0, horizontal: 0 };
 const MAX_ANGLE = 45;
+const CROP_KEYS = ['x', 'y', 'w', 'h', 'angle', 'vertical', 'horizontal'];
+const tilt = v => v === undefined || (Number.isFinite(v) && Math.abs(v) <= 100);
 const validCrop = c => !!c && ['x', 'y', 'w', 'h', 'angle'].every(k => Number.isFinite(c[k])) && c.x >= 0 && c.y >= 0 && c.w >= 0.001 && c.h >= 0.001
-  && c.x + c.w <= 1 + 1e-9 && c.y + c.h <= 1 + 1e-9 && Math.abs(c.angle) <= MAX_ANGLE;
-const sameCrop = (a, b) => ['x', 'y', 'w', 'h', 'angle'].every(k => a[k] === b[k]);
+  && c.x + c.w <= 1 + 1e-9 && c.y + c.h <= 1 + 1e-9 && Math.abs(c.angle) <= MAX_ANGLE && tilt(c.vertical) && tilt(c.horizontal);
+const sameCrop = (a, b) => CROP_KEYS.every(k => (a[k] || 0) === (b[k] || 0));
 
 // A saved recipe with any missing setting at its default, and nothing it doesn't know.
 const fullRecipe = (saved = {}) => ({
   ...Object.fromEntries(SLIDERS.map(s => [s.key, Number.isFinite(saved[s.key]) ? Math.min(s.max, Math.max(s.min, saved[s.key])) : s.default ?? 0])),
   look: lookOf(saved.look) ? saved.look : '',
   retouch: Array.isArray(saved.retouch) ? saved.retouch.filter(validStroke).slice(0, STROKE_LIMITS.strokes) : [],
-  crop: validCrop(saved.crop) ? { x: saved.crop.x, y: saved.crop.y, w: saved.crop.w, h: saved.crop.h, angle: saved.crop.angle } : NO_CROP
+  crop: validCrop(saved.crop) ? Object.fromEntries(CROP_KEYS.map(k => [k, saved.crop[k] || 0])) : NO_CROP
 });
 const isDefault = recipe => SLIDERS.every(s => recipe[s.key] === (s.default ?? 0)) && !recipe.look && !recipe.retouch?.length && sameCrop(recipe.crop || NO_CROP, NO_CROP);
 // A recipe's settings without its retouch strokes and crop, which belong to one photo.
@@ -166,19 +168,27 @@ function whiteBalance(temp, tint) {
   return gains.map(v => v / luma);
 }
 
-// The crop as an affine map from output uv (0–1 across the cropped picture, top row 0) to source uv
-// (0–1 across the upright photo), [a, b, e, c, d, f] for x' = a x + b y + e, y' = c x + d y + f.
-// The turn is done in pixels, so a non-square photo isn't sheared.
+// How far the perspective sliders tilt at ±100: the far edge is drawn from this much less (or more) of the photo.
+const MAX_TILT = 0.6;
+// The crop as a map from output uv (0–1 across the cropped picture, top row 0) to source uv (0–1 across the upright
+// photo): a 3 × 3 matrix, row by row, on (x, y, 1), dividing by the third row. The turn is done in pixels, so a
+// non-square photo isn't sheared; the perspective is a keystone about the photo's centre, the identity at 0.
 function cropMap(crop, W, H) {
   const t = -crop.angle * Math.PI / 180, cos = Math.cos(t), sin = Math.sin(t);
   const px = [W * crop.w, W * (crop.x - 0.5)], py = [H * crop.h, H * (crop.y - 0.5)]; // straightened pixels from the centre
-  return [cos * px[0] / W, -sin * py[0] / W, (cos * px[1] - sin * py[1]) / W + 0.5,
+  const [a, b, e, c, d, f] = [cos * px[0] / W, -sin * py[0] / W, (cos * px[1] - sin * py[1]) / W + 0.5,
     sin * px[0] / H, cos * py[0] / H, (sin * px[1] + cos * py[1]) / H + 0.5];
+  const kv = (crop.vertical || 0) / 100 * MAX_TILT, kh = (crop.horizontal || 0) / 100 * MAX_TILT;
+  if (!kv && !kh) return [a, b, e, c, d, f, 0, 0, 1];
+  // corrected (X, Y) from the centre lands at (X, Y) / (1 − kv Y − kh X) on the photo: positive Vertical widens the top
+  const q = (kv + kh) / 4, K = [[1 - kh / 2, -kv / 2, q], [-kh / 2, 1 - kv / 2, q], [-kh, -kv, 1 + 2 * q]];
+  return K.flatMap(([p, r, s]) => [p * a + r * c, p * b + r * d, p * e + r * f + s]);
 }
-const mapPoint = ([a, b, e, c, d, f], [x, y]) => [a * x + b * y + e, c * x + d * y + f];
-const unmapPoint = ([a, b, e, c, d, f], [x, y]) => { const det = a * d - b * c, u = x - e, v = y - f; return [(d * u - b * v) / det, (a * v - c * u) / det]; };
+const mapPoint = ([a, b, e, c, d, f, g, h, i], [x, y]) => { const z = g * x + h * y + i; return [(a * x + b * y + e) / z, (c * x + d * y + f) / z]; };
+// The inverse map, through the adjugate (any scale of a homography is the same map).
+const unmapPoint = ([a, b, e, c, d, f, g, h, i], p) => mapPoint([d * i - f * h, e * h - b * i, b * f - e * d, f * g - c * i, a * i - e * g, e * c - a * f, c * h - d * g, b * g - a * h, a * d - b * c], p);
 // For the shader: column-major mat3.
-const cropMatrix = (crop, W, H) => { const [a, b, e, c, d, f] = cropMap(crop, W, H); return new Float32Array([a, c, 0, b, d, 0, e, f, 1]); };
+const cropMatrix = (crop, W, H) => { const [a, b, e, c, d, f, g, h, i] = cropMap(crop, W, H); return new Float32Array([a, c, g, b, d, h, e, f, i]); };
 
 // Whether every corner of the crop lands on the photo (and inside the straightened frame).
 const cropFits = (crop, W, H) => crop.x >= -1e-9 && crop.y >= -1e-9 && crop.x + crop.w <= 1 + 1e-9 && crop.y + crop.h <= 1 + 1e-9
@@ -203,8 +213,8 @@ function fitCrop(crop, W, H) {
 // readPixels (bottom row first) it must be at the bottom, hence u_flip.
 // v_uv is across the cropped picture (for the vignette and grain), v_src where that is on the photo.
 const VERTEX = `#version 300 es
-in vec2 a_pos; out vec2 v_uv, v_src; uniform bool u_flip; uniform mat3 u_crop; uniform vec4 u_view; // u_view: the part of the picture drawn, x, y, width, height (0–1)
-void main() { v_uv = u_view.xy + (vec2(a_pos.x, u_flip ? a_pos.y : -a_pos.y) * 0.5 + 0.5) * u_view.zw; v_src = (u_crop * vec3(v_uv, 1)).xy; gl_Position = vec4(a_pos, 0, 1); }`;
+in vec2 a_pos; out vec2 v_uv; out vec3 v_src; uniform bool u_flip; uniform mat3 u_crop; uniform vec4 u_view; // u_view: the part of the picture drawn, x, y, width, height (0–1)
+void main() { v_uv = u_view.xy + (vec2(a_pos.x, u_flip ? a_pos.y : -a_pos.y) * 0.5 + 0.5) * u_view.zw; v_src = u_crop * vec3(v_uv, 1); gl_Position = vec4(a_pos, 0, 1); }`;
 
 const FRAGMENT = `#version 300 es
 precision highp float;
@@ -221,7 +231,7 @@ uniform vec2 u_toneLo, u_toneHi, u_splitLo, u_splitHi, u_grainScale;
 uniform bool u_curve; uniform float u_curveY[6], u_curveM[6];
 // Colour mixer: per band hue (-1..1 = -30..30 degrees), saturation and luminance (-1..1), band centres in OkLab degrees.
 uniform bool u_mix; uniform float u_mixH[8], u_mixS[8], u_mixL[8], u_mixAt[8];
-in vec2 v_uv, v_src; out vec4 color;
+in vec2 v_uv; in vec3 v_src; out vec4 color;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
 vec3 toSrgb(vec3 x) { x = max(x, 0.0); return mix(12.92 * x, 1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, x)); }
@@ -379,9 +389,9 @@ vec3 detail(vec2 uv) {
 
 void main() {
   // Off the photo (the corners of a turned photo while cropping): the editor's background.
-  vec2 margin = 0.5 / vec2(textureSize(u_src, 0));
-  if (any(lessThan(v_src, -margin)) || any(greaterThan(v_src, 1.0 + margin))) { color = vec4(0.043, 0.047, 0.063, 1); return; }
-  vec3 c = detail(v_src) * u_wb * u_exposure;
+  vec2 margin = 0.5 / vec2(textureSize(u_src, 0)), src = v_src.xy / v_src.z; // divided here, so a perspective stays straight
+  if (any(lessThan(src, -margin)) || any(greaterThan(src, 1.0 + margin))) { color = vec4(0.043, 0.047, 0.063, 1); return; }
+  vec3 c = detail(src) * u_wb * u_exposure;
   vec3 d = clamp(u_raw ? baseLook(c) : toSrgb(c), 0.0, 1.0);
   // Tone, on display values. Each term is zero at 0 and keeps the curve rising.
   if (u_contrast != 0.0) d = contrast(d, u_contrast);

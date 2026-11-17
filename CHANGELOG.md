@@ -8,6 +8,7 @@
 - Develop has a Tone curve: Darkest, Darks, Lights and Brightest bend their part of the curve, over a histogram of the edited photo. Edits that use it need this version or newer to open.
 - Create's Colours panel has Pick a colour from the page: click anywhere on the design to use that colour.
 - Create's Edit photo Effects tab has Fix blur: it firms up a slightly soft or out-of-focus photo. It can't fix camera shake or heavy blur.
+- Develop's Crop has Vertical and Horizontal: they fix lines that lean in when you tilt the camera up at a building or shoot at an angle. Edits that use them need this version or newer to open.
 - Deliver has a Copyright field: the text is written into each delivered photo's details (EXIF).
 
 ## 1.0.0

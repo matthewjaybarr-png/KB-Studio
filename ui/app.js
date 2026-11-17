@@ -254,6 +254,8 @@ const ASPECTS = ['Original', 'Free', '1:1', '4:5', '5:7', '2:3', '16:9'];
 sliders.insertAdjacentHTML('beforeend', `<h3>Crop</h3><div class="crop"><button id="crop" type="button" title="Crop (R)"></button>
   <select id="aspect" aria-label="Aspect ratio">${ASPECTS.map(a => `<option>${a}</option>`).join('')}</select><button id="aspect-swap" type="button" title="Swap width and height">Swap</button></div>
   <label><span>Straighten</span><output></output><input type="range" min="${-MAX_ANGLE}" max="${MAX_ANGLE}" step="0.1" value="0" data-crop="angle"></label>
+  <label title="Fixes lines that lean in, as when looking up at a building"><span>Vertical</span><output></output><input type="range" min="-100" max="100" step="1" value="0" data-crop="vertical"></label>
+  <label title="Fixes lines that lean in from the side"><span>Horizontal</span><output></output><input type="range" min="-100" max="100" step="1" value="0" data-crop="horizontal"></label>
   <p id="crop-hint"></p><button id="crop-cancel-photo" type="button" hidden>Cancel crop</button><button id="crop-reset" type="button">Reset crop</button>`);
 sliders.insertAdjacentHTML('beforeend', `<h3>Retouch</h3><div class="tools">${Object.entries(TOOLS).map(([key, label]) =>
   `<button type="button" data-tool="${key}">${label}</button>`).join('')}</div>
@@ -311,14 +313,17 @@ function paintSliders() {
   $('#mix-reset').disabled = !MIX_KEYS.some(k => editing?.recipe[k]);
   $('#look').value = editing?.recipe.look || '';
   sliders.querySelector('[data-key=lookAmount]').disabled = !editing?.recipe.look;
-  const crop = cropping?.crop || editing?.recipe.crop || NO_CROP, angle = sliders.querySelector('[data-crop=angle]');
-  angle.value = crop.angle;
-  angle.previousElementSibling.textContent = (crop.angle > 0 ? '+' : '') + crop.angle.toFixed(1) + '°';
+  const crop = cropping?.crop || editing?.recipe.crop || NO_CROP;
+  for (const input of sliders.querySelectorAll('[data-crop]')) {
+    const v = crop[input.dataset.crop] || 0;
+    input.value = v;
+    input.previousElementSibling.textContent = (v > 0 ? '+' : '') + (input.dataset.crop === 'angle' ? v.toFixed(1) + '°' : v);
+  }
   $('#aspect').value = aspect;
   $('#crop').textContent = cropping ? 'Apply crop' : 'Crop';
   $('#crop').title = cropping ? 'Apply crop (Enter)' : 'Crop (R)';
   $('#crop-cancel-photo').hidden = !cropping;
-  $('#crop-hint').textContent = cropping ? 'Drag a corner or edge to crop. Drag inside to move the crop.' : 'Crop and straighten; the original file is never changed.';
+  $('#crop-hint').textContent = cropping ? 'Drag a corner or edge to crop. Drag inside to move the crop.' : 'Crop, straighten and fix leaning lines; the original file is never changed.';
   stage.classList.toggle('cropping', !!cropping);
 }
 
@@ -372,7 +377,7 @@ $('#look').onchange = () => {
 function draw() {
   $('#develop-caption').textContent = editing ? caption(editing.photo) + (before ? ' · Before' : '') : '';
   // Cropping shows the whole straightened photo, with the crop drawn over it.
-  if (developer) developer.crop = !editing ? NO_CROP : cropping ? { ...NO_CROP, angle: cropping.crop.angle } : editing.recipe.crop;
+  if (developer) developer.crop = !editing ? NO_CROP : cropping ? { ...NO_CROP, angle: cropping.crop.angle, vertical: cropping.crop.vertical || 0, horizontal: cropping.crop.horizontal || 0 } : editing.recipe.crop;
   if (developer && !frame) frame = requestAnimationFrame(() => { frame = 0; developer.show(before || !editing ? {} : editing.recipe); paintOverlay(); });
   clearTimeout(curveTimer); curveTimer = setTimeout(paintCurve, 120);
 }
@@ -541,10 +546,11 @@ function setAspect(name) {
   if (cropping.ratio) cropping.crop = reshape(cropping.crop, cropping.ratio);
   paintSliders(); draw();
 }
-function setAngle(angle) {
+// Straighten, Vertical or Horizontal.
+function setCropTurn(key, value) {
   if (!startCrop()) return;
   cropping.base ||= cropping.crop; // a straighten drag fits from where it began, so it doesn't keep shrinking
-  cropping.crop = fitCrop({ ...cropping.base, angle }, developer.width, developer.height);
+  cropping.crop = fitCrop({ ...cropping.base, [key]: value }, developer.width, developer.height);
   paintSliders(); draw();
 }
 $('#crop').onclick = () => { $('#crop').blur(); toggleCrop(); };
@@ -567,9 +573,9 @@ $('#crop-reset').onclick = () => {
   editing.recipe = { ...was, crop: NO_CROP };
   commit(editing, was);
 };
-sliders.addEventListener('input', event => { if (event.target.dataset.crop) setAngle(+event.target.value); });
+sliders.addEventListener('input', event => { if (event.target.dataset.crop) setCropTurn(event.target.dataset.crop, +event.target.value); });
 sliders.addEventListener('change', event => { if (event.target.dataset.crop && cropping) cropping.base = null; });
-sliders.addEventListener('dblclick', event => { if (event.target.dataset.crop && editing?.ready) { setAngle(0); cropping.base = null; } });
+sliders.addEventListener('dblclick', event => { if (event.target.dataset.crop && editing?.ready) { setCropTurn(event.target.dataset.crop, 0); cropping.base = null; } });
 
 // The crop's corners and edge midpoints on screen, and what a press at (x, y) on the canvas grabs.
 function cropHandles() {
