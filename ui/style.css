@@ -529,3 +529,4 @@ header,.create-bar{border-bottom-color:var(--pink)}
 .bulk-class-row,.bulk-save-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.bulk-class-row label{font-weight:600}.bulk-class-row select{flex:1;min-width:0}
 #bulk-class-name-row{display:inline-flex;gap:6px;flex:1;min-width:220px}#bulk-class-name{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--edge);border-radius:8px;font:inherit}
 #bulk-class-note{color:var(--muted);font-size:13px}#bulk-class-delete.sure{color:#fff;background:#d6455d}
+.upper-canvas.eyedropper{cursor:crosshair!important}

@@ -1906,6 +1906,21 @@ $('#colour-save').onclick = () => {
   if (!settings.colours.includes(c)) settings.colours = [c, ...settings.colours].slice(0, 12);
   saveSettings(); paintColours();
 };
+// Eyedropper: the next click on the page takes the colour under the mouse; Escape or a click off the page gives up.
+let eyedropper = false;
+function stopEyedropper() { eyedropper = false; board?.upperCanvasEl.classList.remove('eyedropper'); $('#colour-pick').classList.remove('on'); }
+$('#colour-pick').onclick = () => { closeMenus(); eyedropper = true; board.upperCanvasEl.classList.add('eyedropper'); $('#colour-pick').classList.add('on'); };
+addEventListener('mousedown', e => {
+  if (!eyedropper || e.button !== 0) return;
+  stopEyedropper();
+  const canvas = board.lowerCanvasEl, r = canvas.getBoundingClientRect();
+  if (e.target !== board.upperCanvasEl) return;
+  e.preventDefault(); e.stopPropagation();
+  const x = Math.floor((e.clientX - r.left) * canvas.width / r.width), y = Math.floor((e.clientY - r.top) * canvas.height / r.height);
+  const [red, green, blue] = canvas.getContext('2d').getImageData(x, y, 1, 1).data;
+  applyColour('#' + [red, green, blue].map(v => v.toString(16).padStart(2, '0')).join(''));
+}, true);
+addEventListener('keydown', e => { if (eyedropper && e.key === 'Escape') { e.stopPropagation(); stopEyedropper(); } }, true);
 
 // ---- Output: PNG, JPEG and a 300-dpi PDF ----
 // Draw the design on a fresh canvas so the screen's zoom and selection never get in.

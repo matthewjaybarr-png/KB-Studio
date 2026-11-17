@@ -2014,6 +2014,15 @@ const test = `<script>
     await settle(flush(), 'effects save'); await settle(openDesign('Effects test'), 'effects reopen');
     const liftText = board.getObjects()[0];
     step(liftText.kbEffect === 'lift' && liftText.shadow?.offsetY > 0 && liftText.fill === '#8c52ff', 'text effects survive save and reopen');
+    const purple = board.getObjects().find(o => o.fill === '#5e17eb'), pickAt = kbe.util.transformPoint(purple.getCenterPoint(), board.viewportTransform), pickBox = board.upperCanvasEl.getBoundingClientRect();
+    const pickDown = () => board.upperCanvasEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX: pickBox.left + pickAt.x, clientY: pickBox.top + pickAt.y }));
+    board.renderAll(); $('#colour-pick').click();
+    step($('#pop-colours').hidden && board.upperCanvasEl.classList.contains('eyedropper'), () => 'Pick a colour closes the panel and waits for a click on the page: ' + [shown('#colour-pick'), $('#pop-colours').hidden, board.upperCanvasEl.className, eyedropper]);
+    press('Escape');
+    step(!board.upperCanvasEl.classList.contains('eyedropper'), 'Escape gives up picking');
+    $('#colour-pick').click(); pickDown();
+    step(board.backgroundColor === '#5e17eb' && !board.getActiveObject() && !board.upperCanvasEl.classList.contains('eyedropper'), () => 'a click on the purple square takes its colour, without selecting it: ' + board.backgroundColor);
+    $('#colours-open').click(); $('#colours-default').querySelector('[data-colour="#f4e1c1"]').click();
     selectObjects([liftText]); $('#text-effects').querySelector('[data-effect=none]').click();
     step(!liftText.kbEffect && !liftText.shadow && liftText.fill === '#8c52ff', 'None takes the effect off');
     // Layers drag: the list is front-first, so the rectangle's row (top) dropped below the text's row sends it behind.
