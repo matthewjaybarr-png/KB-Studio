@@ -38,7 +38,7 @@ const validSize = s => Array.isArray(s) && s.length === 2 && s.every(v => Number
 const docPage = doc => doc.page === 'custom' && validSize(doc.size) ? 'custom' : PAGES[doc.page] ? doc.page : 'letter';
 const docSize = doc => docPage(doc) === 'custom' ? doc.size.map(Number) : sizeIn(docPage(doc));
 const docPages = doc => Array.isArray(doc.pages) && doc.pages.length ? doc.pages.slice(0, MAX_PAGES) : [doc.canvas || blankPage()];
-const KEEP = ['kbName', 'kbLocked', 'kbFrame', 'kbEffect', 'kbOriginal', 'kbFilter', 'kbLocal', 'kbMask', 'kbFade']; // our own fields, saved with every object
+const KEEP = ['kbName', 'kbLocked', 'kbFrame', 'kbEffect', 'kbOriginal', 'kbFilter', 'kbLocal', 'kbMask', 'kbFade', 'kbPageNo']; // our own fields, saved with every object
 const SHARED_PICTURES = new Set(['src', 'kbOriginal', 'kbMask']); // picture data kept once however many undo steps use it
 // Cards printed several to a sheet. Half and quarter cards butt up against each other with cut marks between; a
 // label sheet has its own margins and spacing (`left`, `top`, and `dx`, `dy` from one label to the next, in inches,
@@ -1295,13 +1295,24 @@ async function filterPicture(src, filter, edge = Infinity) {
   filterer.setRaw(bytes, false);
   const out = filterer.pixels(fullRecipe(filter), Math.max(w, h));
   if (clear) for (let i = 3; i < source.length; i += 4) out.data[i] = source[i]; // clip art keeps its transparency
+  const tones = duotoneOf(filter?.duotone);
+  if (tones) for (let i = 0, d = out.data; i < d.length; i += 4) { // shadows take the first colour, highlights the second
+    const y = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+    for (let c = 0; c < 3; c++) d[i + c] = Math.round(tones[0][c] + (tones[1][c] - tones[0][c]) * y);
+  }
   ctx.putImageData(out, 0, 0);
   return ctx.canvas.toDataURL(clear || src.startsWith('data:image/png') ? 'image/png' : 'image/jpeg', 0.92);
+}
+// Duotone: "#shadow,#highlight", as Canva's photo Duotone; anything else (a damaged file) is no duotone.
+const DUOTONES = [['Midnight', '#1b1f5e,#ff8fab'], ['Ocean', '#0b3954,#7fe7dc'], ['Forest', '#1e3d2f,#e9f5a1'], ['Sunset', '#5b1a4a,#ffc15e'], ['Berry', '#3a0ca3,#f72585'], ['Sepia', '#3b2412,#f3e1c0']];
+function duotoneOf(v) {
+  if (typeof v !== 'string' || !/^#[0-9a-f]{6},#[0-9a-f]{6}$/i.test(v)) return null;
+  return v.split(',').map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
 }
 // Settings left at their defaults are dropped; nothing left means no filter.
 function cleanFilter(f) {
   const out = {};
-  for (const [k, v] of Object.entries(f || {})) if (k === 'look' || k === 'preset' ? v : k === 'lookAmount' ? f.look && v !== 100 : v !== 0) out[k] = v;
+  for (const [k, v] of Object.entries(f || {})) if (k === 'look' || k === 'preset' ? v : k === 'duotone' ? duotoneOf(v) : k === 'lookAmount' ? f.look && v !== 100 : v !== 0) out[k] = v;
   return Object.keys(out).length ? out : null;
 }
 function setFilter(image, filter) {
@@ -1389,6 +1400,12 @@ function paintFilters() {
   $('#filter-presets').replaceChildren(...mine.map(p => tile('preset:' + p.name, p.name, p.recipe, current.preset === p.name, () => setFilter(image, { ...p.recipe, preset: p.name }))));
   $('#filter-strength').value = current.look ? current.lookAmount ?? 100 : strength;
   $('#filter-strength').disabled = !current.look;
+  const tones = duotoneOf(current.duotone);
+  $('#filter-duotones').replaceChildren(
+    tile('duotone:none', 'None', {}, !tones, () => setFilter(image, { ...current, duotone: '' })),
+    ...DUOTONES.map(([name, v]) => tile('duotone:' + v, name, { duotone: v }, current.duotone === v, () => setFilter(image, { ...current, duotone: v }))));
+  $('#duotone-dark').value = current.duotone?.slice(0, 7) || DUOTONES[0][1].slice(0, 7);
+  $('#duotone-light').value = current.duotone?.slice(8) || DUOTONES[0][1].slice(8);
   $('#filter-adjust').replaceChildren(...ADJUST.map(([key, label, min, max, step]) => {
     const row = document.createElement('label'), input = Object.assign(document.createElement('input'), { type: 'range', min, max, step, value: current[key] || 0 });
     input.dataset.adjust = key;
@@ -1400,6 +1417,7 @@ function paintFilters() {
 }
 $('#filters-open').addEventListener('click', paintFilters);
 $('#filter-strength').onchange = e => { const image = filterTarget(); if (image?.kbFilter?.look) setFilter(image, { ...image.kbFilter, lookAmount: +e.target.value }); };
+for (const id of ['#duotone-dark', '#duotone-light']) $(id).onchange = () => { const image = filterTarget(); if (image) setFilter(image, { ...(image.kbFilter || {}), duotone: $('#duotone-dark').value + ',' + $('#duotone-light').value }); };
 $('#filter-remove').onclick = () => { const image = filterTarget(); if (image) setFilter(image, null); };
 // Fabric owns the crop controls and boardPan; this session only handles Apply/Cancel.
 async function startPictureCrop() {
@@ -1739,7 +1757,7 @@ async function useTemplate(name, source) {
 }
 
 // ---- What's new, shown once ----
-const WHATS_NEW = 39;
+const WHATS_NEW = 40;
 function paintWhatsNew() { $('#create-whatsnew').hidden = mode !== 'create' || settings.seen >= WHATS_NEW; }
 $('#whatsnew-ok').onclick = () => { settings.seen = WHATS_NEW; saveSettings(); paintWhatsNew(); };
 
@@ -1805,9 +1823,11 @@ async function addPage(page = blankPage()) {
   if (designPages.length >= MAX_PAGES || !pageReady()) return;
   await Promise.allSettled([...adding]);
   designPages[pageAt] = board.toObject(KEEP);
+  // A new page joins numbered pages with its own number, so every page still has one.
+  if (designPages.some(p => p.objects?.some(o => o.kbPageNo)) && !page.objects?.some(o => o.kbPageNo)) page = { ...page, objects: [...page.objects || [], pageNumberBox(pageAt + 1)] };
   designPages.splice(pageAt + 1, 0, page);
   await loadPage(pageAt + 1);
-  commitDesign(); paintAll();
+  renumberPages(); commitDesign(); paintAll();
 }
 const duplicatePage = () => addPage(JSON.parse(JSON.stringify(board.toObject(KEEP))));
 async function deletePage() {
@@ -1815,7 +1835,7 @@ async function deletePage() {
   await Promise.allSettled([...adding]);
   designPages.splice(pageAt, 1);
   await loadPage(Math.min(pageAt, designPages.length - 1));
-  commitDesign(); paintAll();
+  renumberPages(); commitDesign(); paintAll();
 }
 function movePage(by) {
   const to = pageAt + by;
@@ -1823,8 +1843,29 @@ function movePage(by) {
   designPages[pageAt] = board.toObject(KEEP);
   [designPages[pageAt], designPages[to]] = [designPages[to], designPages[pageAt]];
   pageAt = to;
-  commitDesign(); paintPages();
+  renumberPages(); commitDesign(); paintPages();
 }
+// Page numbers are text boxes marked kbPageNo, rewritten to their page's number whenever pages are added, removed or moved.
+function renumberPages() {
+  designPages = designPages.map((p, i) => i === pageAt || !p.objects?.some(o => o.kbPageNo && o.text !== String(i + 1)) ? p : { ...p, objects: p.objects.map(o => o.kbPageNo ? { ...o, text: String(i + 1) } : o) });
+  for (const o of board.getObjects()) if (o.kbPageNo && o.text !== String(pageAt + 1)) o.set('text', String(pageAt + 1));
+  board.requestRenderAll();
+}
+function pageNumberBox(i) {
+  const [w, h] = pagePx();
+  return new kbe.Textbox(String(i + 1), { left: w / 2 - 60, top: h - PX / 2 - 34, width: 120, fontSize: 28, fontFamily: settings.fonts[0] || FONTS[0], fill: textColour(), textAlign: 'center', kbName: 'Page number', kbPageNo: true }).toObject(KEEP);
+}
+// The button adds a number at the foot of every page, or takes them all away when the pages already have them.
+async function togglePageNumbers() {
+  if (!design || !pageReady()) return;
+  await Promise.allSettled([...adding]);
+  designPages[pageAt] = board.toObject(KEEP);
+  const on = designPages.some(p => p.objects.some(o => o.kbPageNo));
+  designPages = designPages.map((p, i) => ({ ...p, objects: on ? p.objects.filter(o => !o.kbPageNo) : [...p.objects, pageNumberBox(i)] }));
+  await loadPage(pageAt);
+  commitDesign(); paintAll();
+}
+$('#page-numbers').onclick = togglePageNumbers;
 $('#page-add').onclick = () => addPage();
 $('#page-duplicate').onclick = duplicatePage;
 $('#page-delete').onclick = deletePage;
@@ -1846,6 +1887,7 @@ function paintPages() {
     return b;
   }));
   $('#page-count').textContent = `Page ${pageAt + 1} of ${n}`;
+  $('#page-numbers').textContent = designPages.some((p, i) => i !== pageAt && p.objects?.some(o => o.kbPageNo)) || board.getObjects().some(o => o.kbPageNo) ? '# Remove page numbers' : '# Add page numbers';
   $('#page-left').disabled = pageAt === 0; $('#page-right').disabled = pageAt === n - 1;
   $('#page-delete').disabled = n < 2; $('#page-add').disabled = $('#page-duplicate').disabled = n >= MAX_PAGES;
 }
@@ -1899,6 +1941,34 @@ function paintColours() {
   }));
   if (!$('#colours-default').children.length) $('#colours-default').replaceChildren(...DEFAULT_COLOURS.map(swatch));
   if (design && board) $('#colours-document').replaceChildren(...documentColours().map(swatch));
+  // The selected picture first, then the others on this page.
+  const active = board?.getActiveObject(), photos = board ? [active, ...board.getObjects()].filter(o => o?.type === 'image') : [];
+  const photoColours = [...new Set([...new Set(photos)].slice(0, 3).flatMap(o => pictureColours(o.getElement())))].slice(0, 18);
+  $('#colours-photo-head').hidden = !photoColours.length;
+  $('#colours-photo').replaceChildren(...photoColours.map(swatch));
+}
+// The main colours of a picture, most common first: count 64×64 pixels in coarse bins, then keep bins that differ enough.
+const photoPalettes = new WeakMap();
+function pictureColours(el) {
+  if (photoPalettes.has(el)) return photoPalettes.get(el);
+  const c = Object.assign(document.createElement('canvas'), { width: 64, height: 64 }), g = c.getContext('2d', { willReadFrequently: true });
+  let px;
+  try { g.drawImage(el, 0, 0, 64, 64); px = g.getImageData(0, 0, 64, 64).data; } catch { return []; }
+  const bins = new Map();
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 128) continue; // cut-out pixels are not part of the photo
+    const k = (px[i] >> 4) << 8 | (px[i + 1] >> 4) << 4 | px[i + 2] >> 4, b = bins.get(k) || [0, 0, 0, 0];
+    b[0] += px[i]; b[1] += px[i + 1]; b[2] += px[i + 2]; b[3]++; bins.set(k, b);
+  }
+  const kept = [];
+  for (const [r, gr, bl, n] of [...bins.values()].sort((a, b) => b[3] - a[3])) {
+    const rgb = [r / n, gr / n, bl / n].map(Math.round);
+    if (kept.every(k => Math.hypot(k[0] - rgb[0], k[1] - rgb[1], k[2] - rgb[2]) > 48)) kept.push(rgb);
+    if (kept.length === 6) break;
+  }
+  const out = kept.map(rgb => '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join(''));
+  photoPalettes.set(el, out);
+  return out;
 }
 $('#colours-open').addEventListener('click', paintColours);
 $('#colour-save').onclick = () => {
@@ -1906,6 +1976,21 @@ $('#colour-save').onclick = () => {
   if (!settings.colours.includes(c)) settings.colours = [c, ...settings.colours].slice(0, 12);
   saveSettings(); paintColours();
 };
+// Eyedropper: the next click on the page takes the colour under the mouse; Escape or a click off the page gives up.
+let eyedropper = false;
+function stopEyedropper() { eyedropper = false; board?.upperCanvasEl.classList.remove('eyedropper'); $('#colour-pick').classList.remove('on'); }
+$('#colour-pick').onclick = () => { closeMenus(); eyedropper = true; board.upperCanvasEl.classList.add('eyedropper'); $('#colour-pick').classList.add('on'); };
+addEventListener('mousedown', e => {
+  if (!eyedropper || e.button !== 0) return;
+  stopEyedropper();
+  const canvas = board.lowerCanvasEl, r = canvas.getBoundingClientRect();
+  if (e.target !== board.upperCanvasEl) return;
+  e.preventDefault(); e.stopPropagation();
+  const x = Math.floor((e.clientX - r.left) * canvas.width / r.width), y = Math.floor((e.clientY - r.top) * canvas.height / r.height);
+  const [red, green, blue] = canvas.getContext('2d').getImageData(x, y, 1, 1).data;
+  applyColour('#' + [red, green, blue].map(v => v.toString(16).padStart(2, '0')).join(''));
+}, true);
+addEventListener('keydown', e => { if (eyedropper && e.key === 'Escape') { e.stopPropagation(); stopEyedropper(); } }, true);
 
 // ---- Output: PNG, JPEG and a 300-dpi PDF ----
 // Draw the design on a fresh canvas so the screen's zoom and selection never get in.

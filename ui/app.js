@@ -203,7 +203,7 @@ function move(to) {
 // change and when you leave it, while its pixels are still on the GPU.
 let developer = null, editing = null, before = false, dragStart = null, frame = 0;
 const note = text => { $('#develop-note').textContent = text; $('#develop-note').hidden = !text; };
-const sameRecipe = (a, b) => SETTINGS.every(key => a[key] === b[key]) && a.retouch === b.retouch && sameCrop(a.crop, b.crop);
+const sameRecipe = (a, b) => SETTINGS.every(key => a[key] === b[key]) && a.retouch === b.retouch && a.masks === b.masks && sameCrop(a.crop, b.crop);
 
 // Everything that touches the open photo's pixels runs in order, one step at a time: loading a photo,
 // applying retouch strokes in Rust and patching them in, and reading the look to save. So the strokes
@@ -234,10 +234,18 @@ sliders.insertAdjacentHTML('beforeend', `<h3>Presets</h3><div class="presets"><s
   <input id="preset-name" maxlength="60" placeholder="Preset name, then Enter" hidden>`);
 for (const s of SLIDERS) {
   if (s.group) sliders.insertAdjacentHTML('beforeend', `<h3>${s.group}</h3>`);
+  if (s.group === 'Light') sliders.insertAdjacentHTML('beforeend', '<button id="auto" type="button" title="Set the Light sliders for this photo">Auto</button>');
   if (s.group === 'Look') sliders.insertAdjacentHTML('beforeend', `<select id="look" aria-label="Look"><option value="">None</option>${
     [...new Set(LOOKS.map(l => l.group).filter(Boolean))].map(group => `<optgroup label="${group}"></optgroup>`).join('')}</select>`);
-  sliders.insertAdjacentHTML('beforeend', `<label><span>${s.label}</span><output></output><input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.default ?? 0}" data-key="${s.key}"${s.hue ? ` class="hue" style="background:${hueTrack()}"` : ''}></label>`);
+  if (s.group === 'Tone curve') sliders.insertAdjacentHTML('beforeend', '<canvas id="curve" width="480" height="240" title="Histogram of the edited photo, with the tone curve over it"></canvas>');
+  if (s.group === 'Colour mixer') sliders.insertAdjacentHTML('beforeend', `<div class="bands">${MIX_BANDS.map(([band, name]) =>
+    `<button type="button" data-band="${band}" title="${name}" aria-label="${name}"></button>`).join('')}</div>`);
+  // The window's CSP ignores style attributes, so the swatch colours go in through the DOM.
+  if (s.group === 'Colour mixer') sliders.querySelectorAll('.bands button').forEach((b, i) => { b.style.background = MIX_BANDS[i][3]; });
+  sliders.insertAdjacentHTML('beforeend', `<label${s.band ? ` data-band="${s.band}"` : ''}><span>${s.label}</span><output></output><input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.default ?? 0}" data-key="${s.key}"${s.hue ? ` class="hue" style="background:${hueTrack()}"` : ''}></label>`);
+  if (s.key === MIX_KEYS.at(-1)) sliders.insertAdjacentHTML('beforeend', '<button id="mix-reset" type="button">Reset colour mixer</button>');
 }
+let mixBand = 'red'; // the colour mixer band whose sliders show
 { // each look under the group named on it or the one before
   let group;
   for (const l of LOOKS) { group = l.group || group; $(`#look optgroup[label="${group}"]`).append(new Option(l.name, l.id)); }
@@ -246,7 +254,17 @@ const ASPECTS = ['Original', 'Free', '1:1', '4:5', '5:7', '2:3', '16:9'];
 sliders.insertAdjacentHTML('beforeend', `<h3>Crop</h3><div class="crop"><button id="crop" type="button" title="Crop (R)"></button>
   <select id="aspect" aria-label="Aspect ratio">${ASPECTS.map(a => `<option>${a}</option>`).join('')}</select><button id="aspect-swap" type="button" title="Swap width and height">Swap</button></div>
   <label><span>Straighten</span><output></output><input type="range" min="${-MAX_ANGLE}" max="${MAX_ANGLE}" step="0.1" value="0" data-crop="angle"></label>
+  <label title="Fixes lines that lean in, as when looking up at a building"><span>Vertical</span><output></output><input type="range" min="-100" max="100" step="1" value="0" data-crop="vertical"></label>
+  <label title="Fixes lines that lean in from the side"><span>Horizontal</span><output></output><input type="range" min="-100" max="100" step="1" value="0" data-crop="horizontal"></label>
   <p id="crop-hint"></p><button id="crop-cancel-photo" type="button" hidden>Cancel crop</button><button id="crop-reset" type="button">Reset crop</button>`);
+sliders.insertAdjacentHTML('beforeend', `<h3>Local adjustments</h3><div class="tools">
+  <button type="button" data-mask-kind="linear" aria-pressed="false" title="Drag on the photo from where the change is strongest to where it fades out">Add gradient</button>
+  <button type="button" data-mask-kind="radial" aria-pressed="false" title="Drag on the photo from the centre of the circle outward">Add circle</button></div>
+  <select id="mask-list" aria-label="Masks"></select>
+  ${[['exposure', 'Light'], ['warmth', 'Warmth'], ['saturation', 'Saturation']].map(([key, label]) =>
+    `<label><span>${label}</span><output></output><input type="range" min="-100" max="100" step="1" value="0" data-mask="${key}"></label>`).join('')}
+  <label id="mask-invert"><span>Outside the circle</span><input type="checkbox"></label>
+  <p id="mask-hint"></p><button id="mask-delete" type="button">Delete mask</button>`);
 sliders.insertAdjacentHTML('beforeend', `<h3>Retouch</h3><div class="tools">${Object.entries(TOOLS).map(([key, label]) =>
   `<button type="button" data-tool="${key}">${label}</button>`).join('')}</div>
   <button id="develop-source" type="button" aria-pressed="false" hidden>Choose source</button>
@@ -296,16 +314,25 @@ function paintSliders() {
     input.value = v;
     input.previousElementSibling.textContent = showValue(s, v);
   }
+  for (const el of sliders.querySelectorAll('[data-band]')) {
+    if (el.tagName === 'LABEL') el.hidden = el.dataset.band !== mixBand;
+    else { el.classList.toggle('on', el.dataset.band === mixBand); el.classList.toggle('moved', MIX_KEYS.some(k => k.startsWith(el.dataset.band) && editing?.recipe[k])); }
+  }
+  $('#mix-reset').disabled = !MIX_KEYS.some(k => editing?.recipe[k]);
   $('#look').value = editing?.recipe.look || '';
   sliders.querySelector('[data-key=lookAmount]').disabled = !editing?.recipe.look;
-  const crop = cropping?.crop || editing?.recipe.crop || NO_CROP, angle = sliders.querySelector('[data-crop=angle]');
-  angle.value = crop.angle;
-  angle.previousElementSibling.textContent = (crop.angle > 0 ? '+' : '') + crop.angle.toFixed(1) + '°';
+  const crop = cropping?.crop || editing?.recipe.crop || NO_CROP;
+  for (const input of sliders.querySelectorAll('[data-crop]')) {
+    const v = crop[input.dataset.crop] || 0;
+    input.value = v;
+    input.previousElementSibling.textContent = (v > 0 ? '+' : '') + (input.dataset.crop === 'angle' ? v.toFixed(1) + '°' : v);
+  }
   $('#aspect').value = aspect;
+  paintMasks();
   $('#crop').textContent = cropping ? 'Apply crop' : 'Crop';
   $('#crop').title = cropping ? 'Apply crop (Enter)' : 'Crop (R)';
   $('#crop-cancel-photo').hidden = !cropping;
-  $('#crop-hint').textContent = cropping ? 'Drag a corner or edge to crop. Drag inside to move the crop.' : 'Crop and straighten; the original file is never changed.';
+  $('#crop-hint').textContent = cropping ? 'Drag a corner or edge to crop. Drag inside to move the crop.' : 'Crop, straighten and fix leaning lines; the original file is never changed.';
   stage.classList.toggle('cropping', !!cropping);
 }
 
@@ -359,10 +386,85 @@ $('#look').onchange = () => {
 function draw() {
   $('#develop-caption').textContent = editing ? caption(editing.photo) + (before ? ' · Before' : '') : '';
   // Cropping shows the whole straightened photo, with the crop drawn over it.
-  if (developer) developer.crop = !editing ? NO_CROP : cropping ? { ...NO_CROP, angle: cropping.crop.angle } : editing.recipe.crop;
+  if (developer) developer.crop = !editing ? NO_CROP : cropping ? { ...NO_CROP, angle: cropping.crop.angle, vertical: cropping.crop.vertical || 0, horizontal: cropping.crop.horizontal || 0 } : editing.recipe.crop;
   if (developer && !frame) frame = requestAnimationFrame(() => { frame = 0; developer.show(before || !editing ? {} : editing.recipe); paintOverlay(); });
+  clearTimeout(curveTimer); curveTimer = setTimeout(paintCurve, 120);
+}
+
+// The tone curve graph: the shown photo's brightness histogram (from a small render), the curve and its points.
+let curveTimer = 0;
+function paintCurve() {
+  const c = $('#curve'), g = c.getContext('2d'), w = c.width, h = c.height, css = getComputedStyle(c);
+  g.clearRect(0, 0, w, h);
+  if (!c.offsetParent) return;
+  const recipe = fullRecipe(before || !editing ? {} : editing.recipe);
+  if (developer?.width && editing?.ready) {
+    const d = developer.pixels(recipe, 160).data, bins = new Float32Array(64);
+    for (let i = 0; i < d.length; i += 4) bins[Math.min(63, (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 256 * 64 | 0)]++;
+    const top = Math.max(...bins.slice(1, 63), 1); // pure black and white can tower over the rest, so they don't set the scale
+    g.fillStyle = css.getPropertyValue('--muted') || '#888'; g.globalAlpha = 0.45;
+    bins.forEach((n, i) => { const bh = Math.min(1, n / top) * h; g.fillRect(i * w / 64, h - bh, w / 64 + 0.5, bh); });
+    g.globalAlpha = 1;
+  }
+  const points = curvePoints(CURVE_KEYS.map(([key]) => recipe[key] / 100));
+  g.strokeStyle = css.color; g.lineWidth = 3; g.beginPath();
+  for (let x = 0; x <= w; x += 4) g.lineTo(x, h - curveAt(x / w, points) * h);
+  g.stroke();
+  g.fillStyle = css.color;
+  CURVE_X.slice(1, 5).forEach((x, i) => { g.beginPath(); g.arc(x * w, h - points.y[i + 1] * h, 6, 0, 7); g.fill(); });
 }
 new ResizeObserver(draw).observe(canvas);
+
+// Local adjustments: the mask being edited (maskAt in the open photo's list), and the kind Add gradient or Add
+// circle is waiting to place. Dragging on the photo places a new mask, or the selected one again.
+let maskKind = null, maskAt = 0, maskDrag = null;
+const setMask = patch => { const e = editing; e.recipe = { ...e.recipe, masks: e.recipe.masks.map((m, i) => i === maskAt ? { ...m, ...patch } : m) }; };
+function paintMasks() {
+  const masks = editing?.recipe.masks || [], list = $('#mask-list');
+  maskAt = Math.max(0, Math.min(maskAt, masks.length - 1));
+  const m = masks[maskAt];
+  list.replaceChildren(...masks.map((k, i) => new Option(`${k.kind === 'linear' ? 'Gradient' : 'Circle'} ${i + 1}`, i)));
+  list.hidden = !masks.length; list.value = maskAt;
+  for (const input of sliders.querySelectorAll('[data-mask]')) {
+    const v = m?.[input.dataset.mask] || 0;
+    input.value = v; input.disabled = !m;
+    input.previousElementSibling.textContent = (v > 0 ? '+' : '') + v;
+  }
+  $('#mask-invert').hidden = m?.kind !== 'radial';
+  $('#mask-invert input').checked = !!m?.invert;
+  $('#mask-delete').hidden = !m;
+  for (const b of sliders.querySelectorAll('[data-mask-kind]')) {
+    b.classList.toggle('active', maskKind === b.dataset.maskKind); b.setAttribute('aria-pressed', maskKind === b.dataset.maskKind);
+    b.disabled = masks.length >= MASK_LIMIT;
+  }
+  stage.classList.toggle('masking', typeof railSection === 'string' && railSection === 'local' && !!(maskKind || m)); // photobar.js may not have run yet
+  $('#mask-hint').textContent = maskKind === 'linear' ? 'Drag on the photo from where the change is strongest to where it fades out.'
+    : maskKind === 'radial' ? 'Drag on the photo from the centre of the circle outward.'
+    : m ? 'Set Light, Warmth or Saturation for this mask. Drag on the photo to place it again.'
+    : 'Change part of the photo: add a gradient or a circle, then drag on the photo.';
+}
+// The selected mask over the photo: a gradient's start (solid) and end (dashed) lines, or a circle's full-effect and outer rings.
+function paintMask(g) {
+  const m = (maskDrag?.e || editing).recipe.masks[maskDrag ? maskDrag.index : maskAt];
+  if (!m) return;
+  const W = developer.width, H = developer.height, L = Math.max(W, H);
+  const line = (points, dash) => {
+    for (const [colour, width] of [['rgba(0,0,0,.6)', 3], ['#fff', 1]]) {
+      g.strokeStyle = colour; g.lineWidth = width; g.setLineDash(dash ? [6, 4] : []);
+      g.beginPath(); for (const p of points) g.lineTo(...developer.fromImage(p)); g.stroke();
+    }
+    g.setLineDash([]);
+  };
+  if (m.kind === 'linear') {
+    const px = -(m.y1 - m.y0) * H / W, py = (m.x1 - m.x0) * W / H, k = 1.5 / (Math.hypot(px, py) || 1); // across the gradient, in photo pixels
+    line([[m.x0 - px * k, m.y0 - py * k], [m.x0 + px * k, m.y0 + py * k]], false);
+    line([[m.x1 - px * k, m.y1 - py * k], [m.x1 + px * k, m.y1 + py * k]], true);
+    line([[m.x0, m.y0], [m.x1, m.y1]], true);
+  } else {
+    const ring = r => Array.from({ length: 65 }, (_, i) => [m.x + Math.cos(i * Math.PI / 32) * r * L / W, m.y + Math.sin(i * Math.PI / 32) * r * L / H]);
+    line(ring(m.r / 2), false); line(ring(m.r), true);
+  }
+}
 
 // The brush circle under the pointer, the stroke being painted, and a crosshair where it copies from
 // (joined to the brush by a dashed line while painting).
@@ -375,6 +477,7 @@ function paintOverlay() {
   const e = editing, place = e?.ready && developer.placement();
   paintZoom();
   if (cropping && place) return paintCrop(g);
+  if (railSection === 'local' && place) return paintMask(g);
   if (!tool || !place || e.pickingSource) return;
   const ring = (x, y, r) => {
     for (const [colour, width] of [['rgba(0,0,0,.6)', 3], ['#fff', 1]]) { g.strokeStyle = colour; g.lineWidth = width; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.stroke(); }
@@ -504,10 +607,11 @@ function setAspect(name) {
   if (cropping.ratio) cropping.crop = reshape(cropping.crop, cropping.ratio);
   paintSliders(); draw();
 }
-function setAngle(angle) {
+// Straighten, Vertical or Horizontal.
+function setCropTurn(key, value) {
   if (!startCrop()) return;
   cropping.base ||= cropping.crop; // a straighten drag fits from where it began, so it doesn't keep shrinking
-  cropping.crop = fitCrop({ ...cropping.base, angle }, developer.width, developer.height);
+  cropping.crop = fitCrop({ ...cropping.base, [key]: value }, developer.width, developer.height);
   paintSliders(); draw();
 }
 $('#crop').onclick = () => { $('#crop').blur(); toggleCrop(); };
@@ -530,9 +634,9 @@ $('#crop-reset').onclick = () => {
   editing.recipe = { ...was, crop: NO_CROP };
   commit(editing, was);
 };
-sliders.addEventListener('input', event => { if (event.target.dataset.crop) setAngle(+event.target.value); });
+sliders.addEventListener('input', event => { if (event.target.dataset.crop) setCropTurn(event.target.dataset.crop, +event.target.value); });
 sliders.addEventListener('change', event => { if (event.target.dataset.crop && cropping) cropping.base = null; });
-sliders.addEventListener('dblclick', event => { if (event.target.dataset.crop && editing?.ready) { setAngle(0); cropping.base = null; } });
+sliders.addEventListener('dblclick', event => { if (event.target.dataset.crop && editing?.ready) { setCropTurn(event.target.dataset.crop, 0); cropping.base = null; } });
 
 // The crop's corners and edge midpoints on screen, and what a press at (x, y) on the canvas grabs.
 function cropHandles() {
@@ -751,6 +855,35 @@ sliders.addEventListener('input', event => {
   editing.recipe = { ...editing.recipe, [key]: +event.target.value };
   paintSliders(); draw();
 });
+sliders.addEventListener('click', event => {
+  const b = event.target.closest('[data-mask-kind]');
+  if (!b) return;
+  b.blur(); maskKind = maskKind === b.dataset.maskKind ? null : b.dataset.maskKind; paintSliders(); draw();
+});
+sliders.addEventListener('input', event => {
+  const key = event.target.dataset.mask;
+  if (!key || !editing?.recipe.masks[maskAt]) return;
+  dragStart ||= editing.recipe;
+  setMask({ [key]: +event.target.value });
+  paintSliders(); draw();
+});
+sliders.addEventListener('dblclick', event => {
+  const key = event.target.dataset.mask;
+  if (!key || !editing?.recipe.masks[maskAt]) return;
+  const was = dragStart || editing.recipe;
+  dragStart = null; setMask({ [key]: 0 }); commit(editing, was);
+});
+$('#mask-list').onchange = event => { maskAt = +event.target.value; maskKind = null; paintSliders(); draw(); };
+$('#mask-invert input').onchange = event => {
+  if (!editing?.recipe.masks[maskAt]) return;
+  const was = editing.recipe; setMask({ invert: event.target.checked }); commit(editing, was);
+};
+$('#mask-delete').onclick = () => {
+  if (!editing?.recipe.masks[maskAt]) return;
+  const was = editing.recipe;
+  editing.recipe = { ...was, masks: was.masks.filter((_, i) => i !== maskAt) };
+  maskAt--; commit(editing, was);
+};
 sliders.addEventListener('change', () => { if (editing && dragStart) commit(editing, dragStart); dragStart = null; });
 sliders.addEventListener('dblclick', event => {
   const key = event.target.dataset.key;
@@ -760,6 +893,19 @@ sliders.addEventListener('dblclick', event => {
   editing.recipe = { ...editing.recipe, [key]: SLIDERS.find(s => s.key === key).default ?? 0 };
   commit(editing, was);
 });
+sliders.querySelector('.bands').onclick = event => { if (event.target.dataset.band) { mixBand = event.target.dataset.band; paintSliders(); } };
+$('#auto').onclick = () => {
+  if (!editing?.ready) return;
+  const was = editing.recipe;
+  editing.recipe = { ...was, ...autoLight(developer, was) };
+  commit(editing, was);
+};
+$('#mix-reset').onclick = () => {
+  if (!editing) return;
+  const was = editing.recipe;
+  editing.recipe = { ...was, ...Object.fromEntries(MIX_KEYS.map(k => [k, 0])) };
+  commit(editing, was);
+};
 $('#reset').onclick = () => {
   $('#reset').blur();
   if (!editing) return;
@@ -799,6 +945,12 @@ stage.addEventListener('pointerdown', event => {
     if (grab) { cropping.drag = { grab, start: developer.toView(event.clientX, event.clientY), from: cropping.crop }; capture(event); }
     return;
   }
+  if (railSection === 'local') {
+    const at = developer.toImage(event.clientX, event.clientY), masks = e.recipe.masks, kind = maskKind || masks[maskAt]?.kind;
+    if (event.button !== 0 || !kind || !inside(at) || (maskKind && masks.length >= MASK_LIMIT)) return;
+    maskDrag = { e, was: e.recipe, at: at.map(round), kind, index: maskKind ? masks.length : maskAt, base: maskKind ? {} : masks[maskAt] };
+    return capture(event);
+  }
   const at = developer.toImage(event.clientX, event.clientY);
   if (event.button !== 0 || !tool || !inside(at) || !inside(developer.toView(event.clientX, event.clientY))) return;
   if (tool === 'redeye') { stroke = { e, tool, size: brush.size, strength: strengthOf(tool), points: [at.map(round)] }; capture(event); return draw(); }
@@ -823,6 +975,17 @@ stage.addEventListener('pointermove', event => {
     developer.pan(event.clientX - panning.x, event.clientY - panning.y);
     panning = { x: event.clientX, y: event.clientY };
   } else if (cropping?.drag) dragCrop(event.clientX, event.clientY);
+  else if (maskDrag) {
+    const d = maskDrag, at = developer.toImage(event.clientX, event.clientY).map(v => round(Math.min(2, Math.max(-1, v)))), [x, y] = d.at;
+    const W = developer.width, H = developer.height;
+    const m = { ...d.base, kind: d.kind, ...d.kind === 'linear' ? { x0: x, y0: y, x1: at[0], y1: at[1] } : { x, y, r: round(Math.hypot((at[0] - x) * W, (at[1] - y) * H) / Math.max(W, H)) } };
+    if (validMask(m)) {
+      const masks = [...d.was.masks];
+      masks[d.index] = cleanMask(m);
+      d.e.recipe = { ...d.was, masks }; d.moved = true; maskAt = d.index;
+      paintSliders();
+    }
+  }
   else if (cropping) stage.style.cursor = editing?.ready ? CURSORS[cropGrab(event.clientX, event.clientY)] || '' : '';
   else if (stroke?.tool === 'redeye') {
     // Dragging sets the circle's radius; a plain click keeps the brush size.
@@ -840,11 +1003,17 @@ stage.addEventListener('pointermove', event => {
 stage.addEventListener('mousedown', event => { if (event.button === 1) event.preventDefault(); }); // no autoscroll on middle-drag
 stage.addEventListener('pointerleave', () => { pointer = null; draw(); });
 stage.addEventListener('pointerup', finishStroke);
-stage.addEventListener('pointercancel', () => { stroke = panning = null; if (cropping) cropping.drag = null; draw(); });
+stage.addEventListener('pointercancel', () => { if (maskDrag) maskDrag.e.recipe = maskDrag.was; stroke = panning = maskDrag = null; if (cropping) cropping.drag = null; draw(); });
 
 async function finishStroke() {
   panning = null;
   if (cropping) { cropping.drag = null; return; }
+  if (maskDrag) {
+    const d = maskDrag;
+    maskDrag = null;
+    if (d.moved && editing === d.e) { maskKind = null; commit(d.e, d.was); }
+    return draw();
+  }
   const s = stroke;
   stroke = null;
   draw();
@@ -922,7 +1091,7 @@ const deliverForm = () => ({
   which: deliverBox.querySelector('[name=deliver-which]:checked')?.value || 'all',
   size: $('#deliver-size').value, quality: +$('#deliver-quality').value, names: $('#deliver-names').value,
   client: $('#deliver-client').value.trim(), folder: deliverBox.dataset.folder || null,
-  watermark: $('#deliver-watermark').checked, mark: markText()
+  watermark: $('#deliver-watermark').checked, mark: markText(), copyright: $('#deliver-copyright').value.trim()
 });
 // The photos to deliver, in shoot order.
 function deliverList(which) {
@@ -964,6 +1133,7 @@ function openDeliver() {
   deliverBox.dataset.folder = typeof s.folder === 'string' ? s.folder : '';
   $('#deliver-watermark').checked = !!s.watermark;
   $('#deliver-mark').value = typeof s.mark === 'string' ? s.mark : localStorage.getItem('deliver-mark') || 'PROOF';
+  $('#deliver-copyright').value = typeof s.copyright === 'string' ? s.copyright : localStorage.getItem('deliver-copyright') || '';
   $('#deliver-progress').textContent = ''; $('#deliver-progress').classList.remove('error');
   $('#deliver-ask').hidden = true;
   paintDeliver();
@@ -1002,8 +1172,8 @@ function deliverJpeg(image, s) {
 $('#deliver-go').onclick = async () => {
   const s = deliverForm(), list = deliverList(s.which), shoot = dir, folder = deliverFolder(s), full = s.size === 'full';
   if (!list.length || delivering) return;
-  deliverSettings = { size: s.size, quality: s.quality, names: s.names, client: s.client, folder: s.folder, watermark: s.watermark, mark: s.mark };
-  localStorage.setItem('deliver-mark', s.mark);
+  deliverSettings = { size: s.size, quality: s.quality, names: s.names, client: s.client, folder: s.folder, watermark: s.watermark, mark: s.mark, copyright: s.copyright };
+  localStorage.setItem('deliver-mark', s.mark); localStorage.setItem('deliver-copyright', s.copyright);
   saveShoot();
   const progress = $('#deliver-progress'), run = delivering = { stop: false };
   progress.classList.remove('error');
@@ -1022,7 +1192,7 @@ $('#deliver-go').onclick = async () => {
       if (Math.max(w, h) > limit) throw `${photo.id} is ${w}×${h}; this computer's graphics can make photos up to ${limit} pixels across. Choose Web size`;
       exporter.setRaw(bytes, !!photo.raw);
       const jpeg = new Uint8Array(await (await deliverJpeg(exporter.pixels(recipe, full ? Infinity : WEB_EDGE), s)).arrayBuffer());
-      const save = replace => invoke('save_export', jpeg, { headers: { dir: encodeURIComponent(shoot), folder: encodeURIComponent(folder), name: encodeURIComponent(name), replace: String(replace) } });
+      const save = replace => invoke('save_export', jpeg, { headers: { dir: encodeURIComponent(shoot), folder: encodeURIComponent(folder), name: encodeURIComponent(name), copyright: encodeURIComponent(s.copyright), replace: String(replace) } });
       try { await save(!!replace); done++; } catch (error) {
         if (!String(error).endsWith('already exists')) throw error;
         if (replace === null) replace = await askReplace();

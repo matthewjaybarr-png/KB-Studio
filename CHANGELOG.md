@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Create's Text panel has Add page numbers: a number at the foot of every page that stays right when pages are added, moved or deleted. Click again to remove them.
+- Create's Edit photo Effects tab has Posterize: the photo keeps only a few flat colour levels, from eight at the smallest Size to two at the biggest.
+- Create's picture Filters have Duotone: shadows and highlights become two colours. Pick one of six pairs or choose your own Shadows and Highlights colours; None takes it off and keeps any look.
+
+## 1.1.0
+
+- Develop has a Colour mixer: pick one of eight colours (red to magenta) and change its hue, saturation and brightness without touching the other colours or greys. "Reset colour mixer" clears it. Edits made with it need this version or newer to open.
+- Develop has Presence: Texture brings out (or smooths) fine detail, Clarity adds punch to midtones, and Dehaze cuts through haze or adds a soft veil. Edits that use them need this version or newer to open.
+- Develop has an Auto button under Light: it sets exposure, contrast, highlights, shadows, whites and blacks to suit the photo. Undo takes it back.
+- Develop has a Tone curve: Darkest, Darks, Lights and Brightest bend their part of the curve, over a histogram of the edited photo. Edits that use it need this version or newer to open.
+- Create's Colours panel has Pick a colour from the page: click anywhere on the design to use that colour.
+- Create's Edit photo Effects tab has Fix blur: it firms up a slightly soft or out-of-focus photo. It can't fix camera shake or heavy blur.
+- Develop's Crop has Vertical and Horizontal: they fix lines that lean in when you tilt the camera up at a building or shoot at an angle. Edits that use them need this version or newer to open.
+- Develop has Local adjustments (the Local button on the left): add a gradient or a circle, drag it out on the photo, then change the Light, Warmth and Saturation of just that part, such as darkening a bright sky or lifting a face. "Outside the circle" changes everything else instead. Edits that use them need this version or newer to open.
+- Create's Colours panel has From photos: the main colours of the photos on the page (the selected one first), ready to use on text, shapes or the background.
+- Deliver has a Copyright field: the text is written into each delivered photo's details (EXIF).
+
 ## 1.0.0
 
 - Create now runs on KB Studio's own drawing engine instead of the Fabric.js library. Saved designs keep the same format, so existing designs open and save as before, and designs saved by this version still open in older ones.

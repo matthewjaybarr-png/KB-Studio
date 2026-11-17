@@ -21,6 +21,7 @@ pub enum Effect {
     Dots,
     Mosaic,
     Sketch,
+    Poster,
 }
 
 impl Effect {
@@ -30,6 +31,7 @@ impl Effect {
             "dots" => Effect::Dots,
             "mosaic" => Effect::Mosaic,
             "sketch" => Effect::Sketch,
+            "poster" => Effect::Poster,
             _ => return None,
         })
     }
@@ -47,10 +49,42 @@ pub fn effect(w: usize, h: usize, rgba: &[u8], effect: Effect, size: f32) -> Vec
         Effect::Dots => dots(w, h, rgba, (long / (160.0 - 120.0 * size)).max(4.0)),
         Effect::Mosaic => mosaic(w, h, rgba, ((long / (120.0 - 90.0 * size)).round() as usize).max(3)),
         Effect::Sketch => sketch(w, h, rgba, (long / (500.0 - 380.0 * size)).max(1.0)),
+        Effect::Poster => poster(rgba, (8.0 - 6.0 * size).round() as u32),
     };
     for (o, i) in out.as_chunks_mut::<4>().0.iter_mut().zip(rgba.as_chunks::<4>().0.iter()) {
         o[3] = i[3];
     }
+    out
+}
+
+/// How many Richardson–Lucy rounds Fix blur runs: enough to firm up edges, few enough that noise stays down.
+const DEBLUR_ROUNDS: usize = 10;
+
+/// Fix blur: Richardson–Lucy deconvolution of the brightness, taking the photo to be blurred evenly by a soft, roughly
+/// Gaussian spot; `amount` 0–1 sets that spot from 0.8 to 4 pixels per 2,000 across. It firms up a slightly soft or
+/// out-of-focus photo but can't undo camera shake or heavy blur, and too much brings out noise and halos. The colour
+/// channels move by the brightness change, so colours stay as they were; alpha is kept.
+pub fn deblur(w: usize, h: usize, rgba: &[u8], amount: f32) -> Vec<u8> {
+    if amount <= 0.0 {
+        return rgba.to_vec();
+    }
+    const EPS: f32 = 1.0 / 255.0;
+    let sigma = (0.8 + 3.2 * amount.min(1.0)) * (w.max(h) as f32 / 2000.0).max(1.0);
+    let seen: Vec<f32> = rgba.as_chunks::<4>().0.iter().map(|p| luma(p) + EPS).collect();
+    let mut guess = seen.clone();
+    for _ in 0..DEBLUR_ROUNDS {
+        let blurred = soft(w, h, 1, &guess, sigma);
+        let ratio: Vec<f32> = seen.par_iter().zip(blurred.par_iter()).map(|(s, b)| (s / b.max(EPS)).clamp(0.5, 2.0)).collect();
+        let back = soft(w, h, 1, &ratio, sigma);
+        guess.par_iter_mut().zip(back.par_iter()).for_each(|(g, b)| *g = (*g * b).clamp(EPS, 1.0 + EPS));
+    }
+    let mut out = rgba.to_vec();
+    out.par_chunks_mut(4).zip(guess.par_iter().zip(seen.par_iter())).for_each(|(p, (g, s))| {
+        let lift = (g - s) * 255.0;
+        for c in &mut p[..3] {
+            *c = (*c as f32 + lift).round().clamp(0.0, 255.0) as u8;
+        }
+    });
     out
 }
 
@@ -231,6 +265,13 @@ fn dots(w: usize, h: usize, rgba: &[u8], cell: f32) -> Vec<u8> {
     out
 }
 
+/// Posterize, as Photoshop's: each colour channel keeps only `levels` evenly spaced values (2 at the biggest Size, 8 at the smallest).
+fn poster(rgba: &[u8], levels: u32) -> Vec<u8> {
+    let step = 255.0 / (levels - 1) as f32;
+    let table: Vec<u8> = (0..=255u32).map(|v| ((v as f32 / step).round() * step).round() as u8).collect();
+    rgba.iter().map(|&v| table[v as usize]).collect()
+}
+
 fn mosaic(w: usize, h: usize, rgba: &[u8], tile: usize) -> Vec<u8> {
     let (tw, th) = (w.div_ceil(tile), h.div_ceil(tile));
     let mut means = vec![[0f32; 3]; tw * th];
@@ -341,6 +382,27 @@ pub fn relight(w: usize, h: usize, rgba: &[u8], lamp: Option<f32>, amount: f32, 
 mod tests {
     use super::*;
 
+    #[test]
+    fn deblur_brings_back_a_soft_edge_and_zero_changes_nothing() {
+        let (w, h) = (160, 100);
+        // Sharp grey blocks with coloured alpha-kept pixels, then softened the way deblur expects.
+        let sharp: Vec<u8> = (0..w * h)
+            .flat_map(|i| {
+                let (x, y) = (i % w, i / w);
+                let v = if (x / 20 + y / 20) % 2 == 0 { 60 } else { 190 };
+                [v, v, v, 200]
+            })
+            .collect();
+        let grey: Vec<f32> = sharp.as_chunks::<4>().0.iter().map(|p| p[0] as f32).collect();
+        let soft_grey = soft(w, h, 1, &grey, 0.8 + 3.2 * 0.5);
+        let blurry: Vec<u8> = soft_grey.iter().flat_map(|&v| { let v = v.round() as u8; [v, v, v, 200] }).collect();
+        let error = |img: &[u8]| img.as_chunks::<4>().0.iter().zip(sharp.as_chunks::<4>().0).map(|(a, b)| (a[0] as f32 - b[0] as f32).abs()).sum::<f32>() / (w * h) as f32;
+        let fixed = deblur(w, h, &blurry, 0.5);
+        assert!(error(&fixed) < 0.9 * error(&blurry), "deblurred {} vs blurry {}", error(&fixed), error(&blurry));
+        assert!(fixed.as_chunks::<4>().0.iter().all(|p| p[3] == 200 && p[0] == p[1] && p[1] == p[2]));
+        assert_eq!(deblur(w, h, &blurry, 0.0), blurry);
+    }
+
     /// A grey picture with a dark disc in the middle and a light top half.
     fn picture(w: usize, h: usize) -> Vec<u8> {
         let mut v = vec![0u8; w * h * 4];
@@ -359,7 +421,7 @@ mod tests {
     fn every_effect_keeps_size_and_alpha() {
         let (w, h) = (161, 97);
         let src = picture(w, h);
-        for e in [Effect::Oil, Effect::Dots, Effect::Mosaic, Effect::Sketch] {
+        for e in [Effect::Oil, Effect::Dots, Effect::Mosaic, Effect::Sketch, Effect::Poster] {
             let out = effect(w, h, &src, e, 0.5);
             assert_eq!(out.len(), src.len(), "{e:?}");
             assert!(out.as_chunks::<4>().0.iter().zip(src.as_chunks::<4>().0.iter()).all(|(o, i)| o[3] == i[3]), "{e:?} keeps alpha");
@@ -408,6 +470,15 @@ mod tests {
     }
 
     #[test]
+    fn poster_keeps_only_a_few_levels() {
+        let (w, h) = (256, 1);
+        let src: Vec<u8> = (0..w).flat_map(|v| [v as u8, v as u8, 255 - v as u8, 255]).collect();
+        let levels = |size| { let out = effect(w, h, &src, Effect::Poster, size); let mut seen: Vec<u8> = out.as_chunks::<4>().0.iter().map(|p| p[0]).collect(); seen.dedup(); seen };
+        assert_eq!(levels(1.0), vec![0, 255], "the biggest Size leaves two levels");
+        assert_eq!(levels(0.0).len(), 8, "the smallest leaves eight");
+    }
+
+    #[test]
     fn relight_brightens_the_side_facing_the_lamp() {
         // a soft bright hill in the middle: lit from the left, its left slope gets lighter than its right
         let (w, h) = (240, 240);
@@ -435,7 +506,7 @@ mod tests {
     fn big_photos_are_quick() {
         let (w, h) = (4000, 3000);
         let src = picture(w, h);
-        for e in [Effect::Oil, Effect::Dots, Effect::Mosaic, Effect::Sketch] {
+        for e in [Effect::Oil, Effect::Dots, Effect::Mosaic, Effect::Sketch, Effect::Poster] {
             let t = std::time::Instant::now();
             effect(w, h, &src, e, 1.0);
             eprintln!("{e:?}: {:?}", t.elapsed());

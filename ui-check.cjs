@@ -130,7 +130,7 @@ window.__TAURI__ = { core: { Channel: class { onmessage() {} }, invoke: async (c
   if (command === 'red_eye_picture') { const b = new ArrayBuffer(32); new Uint32Array(b, 0, 4).set([0, 0, 2, 2]); new Uint8Array(b, 16).set([40, 40, 40, 255, 40, 40, 40, 255, 40, 40, 40, 255, 40, 40, 40, 255]); return b; }
   if (command === 'find_faces') return window.mockFaces || [{ score: 0.9, rect: [20, 10, 40, 40], landmarks: [[32, 25], [48, 25], [40, 33], [33, 42], [47, 42]] }];
   if (command === 'face_tones') { const v = new DataView(args.buffer, args.byteOffset), w = v.getUint32(0, true), h = v.getUint32(4, true), out = new Uint8Array(w * h * 4); for (let i = 0; i < out.length; i += 4) out.set([args[8 + i], args[9 + i] + 10, args[10 + i], 255], i); return out.buffer; }
-  if (command === 'effect_picture' || command === 'relight_picture') { const v = new DataView(args.buffer, args.byteOffset), w = v.getUint32(0, true), h = v.getUint32(4, true), out = new Uint8Array(w * h * 4), k = command === 'effect_picture' ? 10 : 20; for (let i = 0; i < out.length; i += 4) out.set([args[8 + i] + k, args[9 + i], args[10 + i], 255], i); return out.buffer; }
+  if (command === 'effect_picture' || command === 'relight_picture' || command === 'deblur_picture') { const v = new DataView(args.buffer, args.byteOffset), w = v.getUint32(0, true), h = v.getUint32(4, true), out = new Uint8Array(w * h * 4), k = command === 'effect_picture' ? 10 : command === 'deblur_picture' ? 5 : 20; for (let i = 0; i < out.length; i += 4) out.set([args[8 + i] + k, args[9 + i], args[10 + i], 255], i); return out.buffer; }
   if (command === 'carve_picture') { const w = +options.headers.width, h = +options.headers.height, b = new ArrayBuffer(8 + w * h * 4); new Uint32Array(b, 0, 2).set([w, h]); const px = new Uint8Array(b, 8); for (let i = 0; i < px.length; i += 4) px.set([90, 60, 200, 255], i); return b; }
   if (command === 'find_scan_photos') return window.scanPhotos || [];
   if (command === 'find_picture_corners') return window.foundCorners || null;
@@ -354,6 +354,55 @@ const test = `<script>
     step(raw[0] > 90 && raw[0] < 160 && Math.abs(raw[0] - raw[2]) <= 1, 'RAW mid grey lands mid-tone and neutral (' + Array.from(raw.slice(0, 3)) + ')');
     step(raw[4] >= raw[5] && raw[5] >= raw[6] && raw[6] > 200, 'a RAW highlight above white rolls off without changing hue (' + Array.from(raw.slice(4, 7)) + ')');
     step(warm[0] > warm[2] && cool[2] > cool[0], 'temperature warms and cools');
+    // Colour mixer: a band moves its own colour only; greys and other bands stay; all zeros is the picture as before.
+    dev.setRaw(rawImage(5, 1, [0.6, 0.05, 0.05, 0.05, 0.08, 0.6, 0.2, 0.2, 0.2, 0.05, 0.5, 0.05, 0.9, 0.9, 0.9]), false);
+    const mixed = recipe => Array.from(dev.pixels(recipe, 5).data), plainMix = mixed({}), mixPx = (data, x) => data.slice(x * 4, x * 4 + 3);
+    const moved = (a, x) => Math.max(...mixPx(a, x).map((v, i) => Math.abs(v - mixPx(plainMix, x)[i])));
+    step(mixed(Object.fromEntries(MIX_KEYS.map(k => [k, 0]))).every((v, i) => v === plainMix[i]), 'an all-zero colour mixer is bit-identical');
+    for (const k of ['redH', 'redS', 'redL']) for (const v of [-100, 100]) {
+      const m = mixed({ [k]: v });
+      step(moved(m, 0) > 4 && [1, 2, 3, 4].every(x => moved(m, x) === 0), k + ' ' + v + ' moves red (by ' + moved(m, 0) + ') and leaves blue, greys and green alone');
+    }
+    const g = mixed({ greenL: -100 });
+    step(moved(g, 3) > 4 && [0, 1, 2, 4].every(x => moved(g, x) === 0), 'green luminance moves only green');
+    step(settingsOf({ redH: 20 }).redH === 20 && fullRecipe({}).magentaL === 0 && !isDefault(fullRecipe({ blueS: 5 })), 'mixer values copy with the settings, default to 0 and count as an edit');
+    // Presence: Texture and Clarity push an edge apart (or together) and leave flat areas alone; Dehaze deepens and colours, greys stay grey.
+    const box64 = []; for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) { const v = x >= 24 && x < 40 && y >= 24 && y < 40 ? 0.45 : 0.12; box64.push(v, v, v); }
+    dev.setRaw(rawImage(64, 64, box64), false);
+    const pres = recipe => Array.from(dev.pixels(recipe, 64).data), plainPres = pres({}), presAt = (d, x, y) => d[(y * 64 + x) * 4 + 1];
+    step(pres({ texture: 0, clarity: 0, dehaze: 0 }).every((v, i) => v === plainPres[i]), 'Presence at zero is bit-identical');
+    for (const k of ['texture', 'clarity']) {
+      const up = pres({ [k]: 100 }), down = pres({ [k]: -100 }), d = (a, x, y) => presAt(a, x, y) - presAt(plainPres, x, y);
+      step(d(up, 24, 32) > 3 && d(up, 23, 32) < -3 && d(down, 24, 32) < -2 && d(down, 23, 32) > 2 && Math.abs(d(up, 2, 2)) <= 1 && (k === 'clarity' || Math.abs(d(up, 32, 32)) <= 1),
+        k + ' sharpens or softens the edge and leaves flat areas (Clarity also lifts the small bright square as a whole) (' + [d(up, 24, 32), d(up, 23, 32), d(down, 24, 32), d(down, 23, 32), d(up, 2, 2), d(up, 32, 32)] + ')');
+    }
+    dev.setRaw(rawImage(2, 1, [0.2, 0.2, 0.2, 0.4, 0.15, 0.1]), false);
+    const haze = recipe => Array.from(dev.pixels(recipe, 2).data), chromaOf = p => Math.max(p[4], p[5], p[6]) - Math.min(p[4], p[5], p[6]);
+    const clear = haze({ dehaze: 100 }), hazy = haze({ dehaze: -100 }), unhazed = haze({});
+    step(clear[0] < unhazed[0] && hazy[0] > unhazed[0] && [clear, hazy].every(p => Math.max(p[0], p[1], p[2]) - Math.min(p[0], p[1], p[2]) <= 1) && chromaOf(clear) > chromaOf(unhazed) && chromaOf(hazy) < chromaOf(unhazed),
+      'dehaze deepens grey and colours up, negative adds haze, greys stay grey (' + [unhazed[0], clear[0], hazy[0], chromaOf(unhazed), chromaOf(clear), chromaOf(hazy)] + ')');
+    step(settingsOf({ clarity: 30 }).clarity === 30 && fullRecipe({}).dehaze === 0 && !isDefault(fullRecipe({ texture: 5 })), 'Presence copies with the settings, defaults to 0 and counts as an edit');
+    // Tone curve: each slider bends its own part of a grey ramp, black and white stay put, the ramp keeps rising.
+    dev.setRaw(rawImage(11, 1, [...Array(11)].flatMap((_, i) => { const v = i / 10; return [v, v, v]; })), false);
+    const greyRamp = recipe => { const d = dev.pixels(recipe, 11).data; return [...Array(11)].map((_, i) => d[i * 4 + 1]); }, curveFlat = greyRamp({});
+    step(greyRamp({ curveShadows: 0, curveDarks: 0, curveLights: 0, curveHighlights: 0 }).every((v, i) => v === curveFlat[i]), 'the tone curve at zero is bit-identical');
+    const curveRising = r => r.every((v, i) => !i || v >= r[i - 1]), curveEnds = r => r[0] === curveFlat[0] && r[10] === curveFlat[10];
+    const curveDark = greyRamp({ curveDarks: 100 }), curveBright = greyRamp({ curveHighlights: -100 }), curveZigzag = greyRamp({ curveShadows: 100, curveDarks: -100, curveLights: 100, curveHighlights: -100 });
+    step(curveDark[1] > curveFlat[1] + 10 && Math.abs(curveDark[9] - curveFlat[9]) <= 1 && curveBright[6] < curveFlat[6] - 10 && Math.abs(curveBright[1] - curveFlat[1]) <= 1 && [curveDark, curveBright, curveZigzag].every(r => curveRising(r) && curveEnds(r)),
+      'Darks lifts the darker greys, Brightest pulls down the brightest, and even a zigzag keeps the ramp rising (' + [curveFlat, curveDark, curveBright, curveZigzag].map(r => r.join(' ')).join(' / ') + ')');
+    step(settingsOf({ curveLights: 20 }).curveLights === 20 && fullRecipe({}).curveDarks === 0 && !isDefault(fullRecipe({ curveShadows: 5 })), 'the tone curve copies with the settings, defaults to 0 and counts as an edit');
+    // Auto: a dark photo is brightened, a bright one darkened, a flat one given contrast; its middle lands near mid-grey.
+    const ramp = (lo, hi) => { const v = []; for (let i = 0; i < 256; i++) { const t = lo + (hi - lo) * (i % 16) / 15; v.push(t, t * 0.9, t * 0.8); } return v; };
+    const autoMiddle = r => { const d = dev.pixels(r, 16).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255; return s / (d.length / 4); };
+    dev.setRaw(rawImage(16, 16, ramp(0.002, 0.04)), false);
+    const darkAuto = autoLight(dev, {});
+    step(darkAuto.exposure > 1 && Math.abs(autoMiddle(darkAuto) - 0.45) < 0.12, 'Auto brightens a dark photo to mid-grey (' + JSON.stringify(darkAuto) + ', middle ' + autoMiddle(darkAuto).toFixed(2) + ')');
+    dev.setRaw(rawImage(16, 16, ramp(0.5, 1)), false);
+    const brightAuto = autoLight(dev, {});
+    step(brightAuto.exposure < 0 && Math.abs(autoMiddle(brightAuto) - 0.45) < 0.12, 'Auto darkens a bright photo (' + JSON.stringify(brightAuto) + ')');
+    dev.setRaw(rawImage(16, 16, ramp(0.15, 0.25)), false);
+    const flatAuto = autoLight(dev, {});
+    step(flatAuto.contrast > 10 && flatAuto.whites > 0 && flatAuto.blacks < 0 && LIGHT_KEYS.every(k => Number.isFinite(flatAuto[k])), 'Auto stretches a flat photo (' + JSON.stringify(flatAuto) + ')');
     dev.setRaw(rawImage(16, 16, Array.from(want).filter((_, i) => i % 4 !== 3).map(lin)), false);
     const spreadOf = recipe => { let m = 0; for (let i = 0; i < 256; i++) { const p = at(out(recipe), i % 16, i >> 4); m = Math.max(m, Math.max(...p) - Math.min(...p)); } return m; };
     step(spreadOf({ look: 'bw' }) <= 2, 'the black & white look is grey (spread ' + spreadOf({ look: 'bw' }) + ')');
@@ -435,6 +484,22 @@ const test = `<script>
       'the crop map turns without shearing (positive turns the picture clockwise) and inverts');
     step(close(mapPoint(cropMap(NO_CROP, 3000, 2000), [0.25, 0.75]), [0.25, 0.75]) && fullRecipe({ crop: { x: 0.8, y: 0, w: 0.5, h: 1, angle: 0 } }).crop === NO_CROP && fullRecipe({ crop: { ...NO_CROP, angle: 50 } }).crop === NO_CROP
       && !isDefault(fullRecipe({ crop: tilted })) && settingsOf({ crop: tilted }).crop === undefined, 'no crop is the identity; a bad crop is dropped; a crop is an edit that copy leaves out');
+    // Perspective: Vertical keystones about the centre, the crop shrinks to stay on the photo, and older crops read as 0.
+    const keyed = fitCrop({ ...NO_CROP, vertical: 60 }, 3000, 2000), keyMap = cropMap(keyed, 3000, 2000), span = y => mapPoint(keyMap, [1, y])[0] - mapPoint(keyMap, [0, y])[0];
+    step(cropFits(keyed, 3000, 2000) && !cropFits(grow(keyed, 1.001), 3000, 2000) && span(0) < span(1) * 0.9 && close(unmapPoint(keyMap, mapPoint(keyMap, [0.3, 0.7])), [0.3, 0.7])
+      && fullRecipe({ crop: { x: 0, y: 0, w: 1, h: 1, angle: 0 } }).crop.vertical === 0 && fullRecipe({ crop: { ...NO_CROP, vertical: 150 } }).crop === NO_CROP && !isDefault(fullRecipe({ crop: { ...NO_CROP, horizontal: 5 } })),
+      'Vertical draws the top from less of the photo than the bottom, keeps the crop on it and inverts; old crops have none (' + JSON.stringify(keyed) + ')');
+    const keyedPx = dev.pixels({ crop: keyed }, 16), flatPx = dev.pixels({ crop: { ...keyed, vertical: 0 } }, 16);
+    step(worst(keyedPx.data, flatPx.data) > 0 && worst(dev.pixels({ crop: { ...NO_CROP, angle: 0 } }, 16).data, dev.pixels({}, 16).data) === 0, 'a perspective changes the render, and none leaves it as it was');
+    // Local adjustments: a circle darkens its middle and leaves the corners; Outside the circle swaps them; bad masks are dropped.
+    const ringMask = { kind: 'radial', x: 0.5, y: 0.5, r: 0.2, exposure: -100 }, maskBasePx = dev.pixels({}, 16).data;
+    const maskAt16 = (d, x, y) => d[(y * 16 + x) * 4 + 1], maskInPx = dev.pixels({ masks: [ringMask] }, 16).data, maskOutPx = dev.pixels({ masks: [{ ...ringMask, invert: true }] }, 16).data;
+    step(maskAt16(maskInPx, 8, 8) < maskAt16(maskBasePx, 8, 8) - 10 && maskAt16(maskInPx, 0, 0) === maskAt16(maskBasePx, 0, 0) && maskAt16(maskInPx, 15, 8) === maskAt16(maskBasePx, 15, 8) && maskAt16(maskOutPx, 8, 8) === maskAt16(maskBasePx, 8, 8) && maskAt16(maskOutPx, 15, 8) <= maskAt16(maskBasePx, 15, 8) && worst(maskOutPx, maskBasePx) > 10
+      && worst(dev.pixels({ masks: [] }, 16).data, maskBasePx) === 0,
+      'a circle mask changes inside it and not outside, Outside the circle the other way round, and no masks leave the render as it was (' + [maskAt16(maskInPx, 8, 8), maskAt16(maskBasePx, 8, 8), maskAt16(maskInPx, 15, 8), maskAt16(maskBasePx, 15, 8), maskAt16(maskOutPx, 15, 8), worst(maskOutPx, maskBasePx)] + ')');
+    step(fullRecipe({ masks: [ringMask, { kind: 'linear', x0: 0, y0: 0, x1: 0, y1: 0 }, { kind: 'radial', x: 0.5, y: 0.5, r: 0.2, exposure: 500 }, { kind: 'blob' }] }).masks.length === 1
+      && fullRecipe({ masks: [{ ...ringMask, extra: 1 }] }).masks[0].extra === undefined && !isDefault(fullRecipe({ masks: [ringMask] })) && settingsOf({ masks: [ringMask] }).masks === undefined
+      && fullRecipe({ masks: Array(9).fill(ringMask) }).masks.length === MASK_LIMIT, 'masks are checked, cleaned and capped, count as an edit and stay out of copied settings');
     step(fullRecipe({ look: 'not-a-look' }).look === '' && settingsOf({ exposure: 1, retouch: [{}] }).retouch === undefined, 'an unknown look is dropped; settings leave out strokes');
 
     // Develop: the view.
@@ -445,7 +510,7 @@ const test = `<script>
     await until(() => editing?.ready && !sliders.disabled, 'D develops the photo');
     step(!develop.classList.contains('hidden') && grid.classList.contains('hidden') && calls.at(-1).command === 'develop_source' && calls.at(-1).args.name === 'IMG_0001.CR2', 'a RAW+JPEG pair develops from its RAW');
     slide('exposure', 1);
-    await until(() => savedRecipe('IMG_0001')?.exposure === 1 && savedRecipe('IMG_0001').version === 6, 'a slider change saves the recipe');
+    await until(() => savedRecipe('IMG_0001')?.exposure === 1 && savedRecipe('IMG_0001').version === RECIPE_VERSION, 'a slider change saves the recipe');
     step($('#develop-caption').textContent.includes('Edited') && sliders.querySelector('[data-key="exposure"]').previousElementSibling.textContent === '+1.00', 'caption says Edited; the slider shows its value');
     ctrl('z');
     await until(() => !savedRecipe('IMG_0001') && sliders.querySelector('[data-key="exposure"]').value === '0', 'Ctrl+Z undoes back to the camera file');
@@ -455,6 +520,23 @@ const test = `<script>
     await until(() => savedRecipe('IMG_0001')?.contrast === 0 || savedRecipe('IMG_0001')?.contrast === undefined, 'double-clicking a slider resets it');
     ctrl('z');
     await until(() => savedRecipe('IMG_0001')?.contrast === 30, 'and that reset can be undone');
+    $('#auto').click();
+    await until(() => { const r = savedRecipe('IMG_0001'); return r && LIGHT_KEYS.some(k => r[k] !== (k === 'contrast' ? 30 : k === 'exposure' ? 1 : 0)); }, 'Auto sets the Light sliders and saves');
+    ctrl('z');
+    await until(() => savedRecipe('IMG_0001')?.contrast === 30 && savedRecipe('IMG_0001')?.exposure === 1, 'and Auto can be undone');
+    $('#sliders .bands [data-band=green]').click();
+    step(!sliders.querySelector('[data-key=greenS]').closest('label').hidden && sliders.querySelector('[data-key=redS]').closest('label').hidden, 'a colour mixer band shows its own three sliders');
+    slide('greenS', 40);
+    await until(() => savedRecipe('IMG_0001')?.greenS === 40 && $('#sliders .bands [data-band=green]').classList.contains('moved') && !$('#mix-reset').disabled, 'a colour mixer slider saves with the photo and marks its band');
+    $('#mix-reset').click();
+    await until(() => !savedRecipe('IMG_0001')?.greenS && $('#mix-reset').disabled && savedRecipe('IMG_0001')?.contrast === 30, 'Reset colour mixer clears only the bands');
+    slide('greenS', 40);
+    slide('clarity', 25);
+    const curveInk = () => { const c = $('#curve'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) n += d[i] > 0; return n; };
+    const inkBefore = curveInk(); slide('curveDarks', 60);
+    await until(() => savedRecipe('IMG_0001')?.curveDarks === 60 && $('#curve').getBoundingClientRect().width > 100 && curveInk() > 2000 && curveInk() !== inkBefore, 'a tone curve slider saves, and the graph shows the histogram and the bent curve');
+    slide('curveDarks', 0);
+    await until(() => savedRecipe('IMG_0001')?.clarity === 25 && savedRecipe('IMG_0001')?.greenS === 40, 'a Presence slider saves with the photo');
     press('\\\\');
     step($('#develop-caption').textContent.includes('Before'), 'holding the backslash key shows before');
     document.dispatchEvent(new KeyboardEvent('keyup', { key: '\\\\', bubbles: true }));
@@ -475,10 +557,10 @@ const test = `<script>
     slide('saturation', -100); press('Escape');
     await until(() => disk[dir + '/edited/IMG_0004.thumb'] && thumbs.get('IMG_0004') !== camera, 'its grid thumbnail becomes the edited look');
     await openShoot(dir);
-    step(recipes.IMG_0001?.exposure === 1 && recipes.IMG_0001.contrast === 30 && grid.children[1].textContent.includes('Edited'), 'recipes survive reopening the shoot');
+    step(recipes.IMG_0001?.exposure === 1 && recipes.IMG_0001.contrast === 30 && recipes.IMG_0001.greenS === 40 && recipes.IMG_0001.clarity === 25 && grid.children[1].textContent.includes('Edited'), 'recipes survive reopening the shoot');
     await until(() => calls.some(c => c.command === 'edited' && c.args.id === 'IMG_0001' && c.args.thumb) && loading === 0 && !wanted.length, 'reopened grid uses edited thumbnails');
     move(1); press('d');
-    await until(() => editing?.ready && sliders.querySelector('[data-key="contrast"]').value === '30', 'the sliders show the saved recipe');
+    await until(() => editing?.ready && sliders.querySelector('[data-key="contrast"]').value === '30' && sliders.querySelector('[data-key="greenS"]').value === '40' && sliders.querySelector('[data-key="clarity"]').value === '25', 'the sliders show the saved recipe, colour mixer and Presence too');
     $('#reset').click();
     await until(() => !savedRecipe('IMG_0001') && !disk[dir + '/edited/IMG_0001'] && !grid.children[1].textContent.includes('Edited'), 'Reset all goes back to the camera file');
 
@@ -487,7 +569,7 @@ const test = `<script>
     const strength = sliders.querySelector('[data-key="lookAmount"]');
     step(strength.disabled && $('#look').querySelectorAll('optgroup').length === 3 && $('#look').options.length === LOOKS.length + 1, 'every look is in the list; strength is off without one');
     choose('#look', 'sepia');
-    await until(() => savedRecipe('IMG_0001')?.look === 'sepia' && savedRecipe('IMG_0001').version === 6, 'choosing a look saves it');
+    await until(() => savedRecipe('IMG_0001')?.look === 'sepia' && savedRecipe('IMG_0001').version === RECIPE_VERSION, 'choosing a look saves it');
     step(!strength.disabled && strength.previousElementSibling.textContent === '100%', 'its strength slider turns on at 100%');
     slide('lookAmount', 40); slide('grain', 20);
     await until(() => savedRecipe('IMG_0001')?.lookAmount === 40 && savedRecipe('IMG_0001').grain === 20, 'strength and grain save on top of the look');
@@ -546,7 +628,7 @@ const test = `<script>
     step(saved.tool === 'spot' && nearAll(saved.points, spotPath.map(p => fitted(...p))) && saved.size === 0.01 && near(saved.offset, [0.05, 0]) && saved.strength === undefined, 'at fit, the stroke is saved at the photo points it covered, with the source Rust picked (' + JSON.stringify(saved) + ')');
     step(calls.some(c => c.command === 'spot_source' && c.args.name === 'IMG_0013.CR2' && near(c.args.stroke.points[0], saved.points[0])), 'spot heal asks Rust for its source');
     await until(() => calls.some(c => c.command === 'retouch' && c.args.strokes.length === 1 && c.args.name === 'IMG_0013.CR2'), 'and Rust applies the stroke');
-    step(savedRecipe('IMG_0013').version === 6 && $('#develop-caption').textContent.includes('Edited'), 'a retouch alone makes the photo Edited');
+    step(savedRecipe('IMG_0013').version === RECIPE_VERSION && $('#develop-caption').textContent.includes('Edited'), 'a retouch alone makes the photo Edited');
 
     press(']');
     step(Math.abs(brush.size - 0.0125) < 1e-9 && sliders.querySelector('[data-brush="size"]').previousElementSibling.textContent === '20 px', '] makes the brush bigger');
@@ -724,10 +806,15 @@ const test = `<script>
     angle.value = 5; angle.dispatchEvent(new Event('input', { bubbles: true }));
     step(cropping.crop.angle === 5 && cropFits(cropping.crop, 1600, 1200) && developer.crop.angle === 5 && sameCrop({ ...developer.crop, angle: 0 }, NO_CROP) && angle.previousElementSibling.textContent === '+5.0°', 'Straighten turns the photo and keeps the crop on it');
     angle.dispatchEvent(new Event('change', { bubbles: true }));
+    const upright = sliders.querySelector('[data-crop="vertical"]');
+    upright.value = 30; upright.dispatchEvent(new Event('input', { bubbles: true }));
+    step(cropping.crop.vertical === 30 && cropping.crop.angle === 5 && cropFits(cropping.crop, 1600, 1200) && developer.crop.vertical === 30 && upright.previousElementSibling.textContent === '+30' && sliders.querySelector('[data-crop="horizontal"]').value === '0',
+      'Vertical tilts the photo and keeps the crop on it (' + JSON.stringify(cropping.crop) + ')');
+    upright.dispatchEvent(new Event('change', { bubbles: true }));
     const applied = cropping.crop;
     press('Enter');
     await until(() => sameCrop(crop(), applied), 'Enter applies the crop and saves it');
-    step(!cropping && developer.view.zoom === null && sameCrop(developer.crop, applied) && savedRecipe('IMG_0013').version === 6 && strokes().length === 2, 'the view shows the cropped picture; the strokes are kept');
+    step(!cropping && developer.view.zoom === null && sameCrop(developer.crop, applied) && savedRecipe('IMG_0013').version === RECIPE_VERSION && strokes().length === 2, 'the view shows the cropped picture; the strokes are kept');
     const [px0, py0] = developer.fromImage([0.6, 0.4]);
     step(close(developer.toImage(box.left + px0, box.top + py0), [0.6, 0.4], 1e-6), 'screen and photo points still match through the crop');
     ctrl('z');
@@ -736,6 +823,29 @@ const test = `<script>
     await until(() => sameCrop(crop(), applied), 'and redo puts it back');
     $('#crop-reset').click();
     await until(() => sameCrop(crop(), NO_CROP), 'Reset crop clears it');
+    // Local adjustments: Add circle, drag it out on the photo, then set its Light; each is one undo step and saves.
+    $('#develop-rail [data-section="local"]').click();
+    sliders.querySelector('[data-mask-kind="radial"]').click();
+    step(maskKind === 'radial' && sliders.dataset.section === 'local' && $('.stage').classList.contains('masking') && sliders.querySelector('[data-mask="exposure"]').disabled, 'Add circle waits for a drag on the photo');
+    drag([screen([0.5, 0.5]), [screen([0.5, 0.5])[0] + 100, screen([0.5, 0.5])[1]]]);
+    await until(() => savedRecipe('IMG_0013')?.masks?.length === 1, 'dragging out a circle places it and saves it');
+    const placed = editing.recipe.masks[0];
+    step(placed.kind === 'radial' && close([placed.x, placed.y], [0.5, 0.5], 1e-3) && Math.abs(placed.r - 100 / (1600 * fit)) < 1e-3 && maskKind === null && $('#mask-list').options[0]?.text === 'Circle 1' && !$('#mask-invert').hidden,
+      'the circle sits where it was dragged out (' + JSON.stringify(placed) + ')');
+    const maskLight = sliders.querySelector('[data-mask="exposure"]');
+    maskLight.value = -60; maskLight.dispatchEvent(new Event('input', { bubbles: true })); maskLight.dispatchEvent(new Event('change', { bubbles: true }));
+    await until(() => savedRecipe('IMG_0013')?.masks?.[0]?.exposure === -60, 'Light changes the circle and saves');
+    step(maskLight.previousElementSibling.textContent === '-60', 'the Light value shows');
+    ctrl('z');
+    await until(() => editing.recipe.masks[0]?.exposure === 0, 'one Ctrl+Z takes back the Light');
+    ctrl('z');
+    await until(() => !editing.recipe.masks.length && $('#mask-list').hidden, 'and the next the circle');
+    ctrl('z', true);
+    await until(() => editing.recipe.masks.length === 1, 'redo puts the circle back');
+    $('#mask-delete').click();
+    await until(() => !savedRecipe('IMG_0013')?.masks?.length && $('#mask-delete').hidden, 'Delete mask removes it');
+    $('#develop-rail [data-section="adjust"]').click();
+    step(maskKind === null && !$('.stage').classList.contains('masking'), 'leaving Local drops the mask tool');
     press('Escape');
     step(develop.classList.contains('hidden') && !grid.classList.contains('hidden'), 'a second Esc goes to the grid');
     await until(() => disk[dir + '/edited/IMG_0013.thumb'], 'leaving saves the retouched look');
@@ -761,7 +871,7 @@ const test = `<script>
     set($('#deliver-client'), ' Smith & Wedding! ');
     step($('#deliver-preview').textContent.startsWith('Smith-Wedding-0001.jpg, Smith-Wedding-0002.jpg'), () => 'names are filename safe: ' + $('#deliver-preview').textContent);
     step($('#deliver-folder').textContent.replaceAll('\u200e', '') === dir + '/Delivered/Smith-Wedding', () => 'default folder: ' + $('#deliver-folder').textContent);
-    set($('#deliver-size'), 'web'); set($('#deliver-quality'), '80'); set($('#deliver-watermark'), true); set($('#deliver-mark'), 'PROOF');
+    set($('#deliver-size'), 'web'); set($('#deliver-quality'), '80'); set($('#deliver-watermark'), true); set($('#deliver-mark'), 'PROOF'); set($('#deliver-copyright'), ' © 2026 Test Studio ');
     step($('#deliver-quality-value').textContent === '80', 'quality shows its value');
     delivered[dir + '/Delivered/Smith-Wedding/Smith-Wedding-0002.jpg'] = new Uint8Array(1);
     $('#deliver-go').click();
@@ -772,6 +882,7 @@ const test = `<script>
     step($('#deliver-progress').textContent.includes('1 already there, skipped'), 'and says what it skipped');
     const exports = calls.filter(c => c.command === 'save_export');
     step(exports.length === want && exports.every(c => decodeURIComponent(c.options.headers.folder) === dir + '/Delivered/Smith-Wedding'), 'one save per photo, into the client folder');
+    step(exports.every(c => decodeURIComponent(c.options.headers.copyright) === '© 2026 Test Studio') && localStorage.getItem('deliver-copyright') === '© 2026 Test Studio', 'each file is sent with the copyright, and it is remembered');
     step(calls.filter(c => c.command === 'export_source').every(c => c.args.full === false), 'web size asks for a smaller source');
     const first = delivered[dir + '/Delivered/Smith-Wedding/Smith-Wedding-0001.jpg'];
     step(first && first[0] === 0xff && first[1] === 0xd8, 'the files are JPEGs');
@@ -1897,6 +2008,29 @@ const test = `<script>
     await until(() => designPages.length === 2 && pageAt === 1, 'Delete page removes it');
     $('#create-undo').click();
     await until(() => designPages.length === 3 && !restoring, 'undo brings a deleted page back');
+    // Page numbers: one at the foot of each page, kept in order when pages move or go, and taken away again.
+    const nums = () => allPages().map(p => p.objects.filter(o => o.kbPageNo).map(o => o.text).join()).join('|');
+    step(nums() === '||' && $('#page-numbers').textContent === '# Add page numbers', 'pages start without numbers');
+    $('#page-numbers').click();
+    await until(() => nums() === '1|2|3' && !restoring, () => 'Page numbers numbers every page: ' + nums());
+    step(allPages()[0].objects.find(o => o.kbPageNo).top > pagePx()[1] / 2 && $('#page-numbers').textContent === '# Remove page numbers', 'at the foot of the page, and the button now takes them away');
+    $('#page-list').children[0].click();
+    await until(() => pageAt === 0 && !restoring, 'back to the first page');
+    $('#page-right').click();
+    step(pageAt === 1 && nums() === '1|2|3' && board.getObjects().find(o => o.kbPageNo).text === '2', () => 'moving a page keeps the numbers in order: ' + nums());
+    $('#page-left').click();
+    step(pageAt === 0 && nums() === '1|2|3' && board.getObjects().find(o => o.kbPageNo).text === '1', () => 'and moving it back: ' + nums());
+    $('#page-delete').click();
+    await until(() => designPages.length === 2 && !restoring, 'delete a numbered page');
+    step(nums() === '1|2', () => 'deleting a page renumbers the rest: ' + nums());
+    $('#create-undo').click();
+    await until(() => designPages.length === 3 && !restoring, 'undo brings it back');
+    $('#page-add').click();
+    await until(() => designPages.length === 4 && !restoring && nums() === '1|2|3|4', () => 'a page added to numbered pages gets its own number: ' + nums());
+    $('#page-delete').click();
+    await until(() => designPages.length === 3 && !restoring && nums() === '1|2|3', () => 'and deleting it leaves the rest in order: ' + nums());
+    $('#page-numbers').click();
+    await until(() => nums() === '||' && !restoring && $('#page-numbers').textContent === '# Add page numbers', () => 'clicked again, the numbers go: ' + nums());
     await flush();
     const savedPages = JSON.parse(disk['c:designs:Pages test']);
     step(savedPages.format === 2 && savedPages.pages.length === 3, 'all pages are saved');
@@ -1941,12 +2075,29 @@ const test = `<script>
     $('#colours-open').click();
     const docColours = [...$('#colours-document').children].map(b => b.dataset.colour);
     step(docColours.includes('#ff3131') && docColours.includes('#5e17eb') && docColours.includes('#ffffff') && $('#colours-default').children.length === DEFAULT_COLOURS.length, () => "the colour panel shows this design's colours and a default palette: " + docColours);
+    step($('#colours-photo-head').hidden && !$('#colours-photo').children.length, 'with no photo there is no From photos row');
+    const halves = Object.assign(document.createElement('canvas'), { width: 32, height: 32 }), halvesG = halves.getContext('2d');
+    halvesG.fillStyle = '#e02020'; halvesG.fillRect(0, 0, 32, 20); halvesG.fillStyle = '#2040e0'; halvesG.fillRect(0, 20, 32, 12);
+    const colourPhoto = new kbe.Image(halves); board.add(colourPhoto); board.discardActiveObject(); paintColours();
+    const photoColourList = [...$('#colours-photo').children].map(b => b.dataset.colour);
+    step(!$('#colours-photo-head').hidden && photoColourList[0] === '#e02020' && photoColourList[1] === '#2040e0', () => "From photos shows a photo's main colours, most common first: " + photoColourList);
+    $('#colours-photo').children[1].click(); board.remove(colourPhoto); paintColours();
+    step(board.backgroundColor === '#2040e0' && $('#colours-photo-head').hidden, () => 'a photo colour applies like any swatch, and the row goes with the photo: ' + board.backgroundColor);
     selectObjects([effectText]);
     $('#colours-default').querySelector('[data-colour="#00bf63"]').click();
     step(effectText.fill === '#00bf63' && $('#prop-fill').value === '#00bf63', 'a default colour applies to the selection');
     board.discardActiveObject(); paintPanel();
     $('#colours-default').querySelector('[data-colour="#f4e1c1"]').click();
     step(board.backgroundColor === '#f4e1c1', 'with nothing selected it colours the background');
+    const purple = board.getObjects().find(o => o.fill === '#5e17eb'), pickAt = kbe.util.transformPoint(purple.getCenterPoint(), board.viewportTransform), pickBox = board.upperCanvasEl.getBoundingClientRect();
+    const pickDown = () => board.upperCanvasEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX: pickBox.left + pickAt.x, clientY: pickBox.top + pickAt.y }));
+    board.renderAll(); $('#colour-pick').click();
+    step($('#pop-colours').hidden && board.upperCanvasEl.classList.contains('eyedropper'), () => 'Pick a colour closes the panel and waits for a click on the page: ' + [shown('#colour-pick'), $('#pop-colours').hidden, board.upperCanvasEl.className, eyedropper]);
+    press('Escape');
+    step(!board.upperCanvasEl.classList.contains('eyedropper'), 'Escape gives up picking');
+    $('#colour-pick').click(); pickDown();
+    step(board.backgroundColor === '#5e17eb' && !board.getActiveObject() && !board.upperCanvasEl.classList.contains('eyedropper'), () => 'a click on the purple square takes its colour, without selecting it: ' + board.backgroundColor);
+    $('#colours-open').click(); $('#colours-default').querySelector('[data-colour="#f4e1c1"]').click();
     closeMenus();
     selectObjects([effectText]);
     step(shown('#text-effects'), 'text has an effects grid');
@@ -2016,6 +2167,21 @@ const test = `<script>
     await until(() => !reopenedPic.kbFilter && !reopenedPic.kbOriginal && reopenedPic.getSrc() === originalSrc && reopenedPic.cropX === 20, 'Remove filter goes back to the original exactly');
     $('#create-undo').click();
     await until(() => board.getObjects()[0]?.kbFilter?.look === 'bw' && !restoring, 'undo brings the filter back');
+    // Duotone: shadows and highlights become two chosen colours, on top of the look.
+    { const duoPic = board.getObjects()[0]; selectObjects([duoPic]); $('#filters-open').click();
+      await until(() => $('#filter-duotones').children.length === DUOTONES.length + 1 && $('#filter-duotones .on')?.dataset.filter === 'duotone:none', 'Duotone offers None and its colour pairs');
+      $('#filter-duotones [data-filter="duotone:#0b3954,#7fe7dc"]').click();
+      await until(() => duoPic.kbFilter?.duotone === '#0b3954,#7fe7dc' && duoPic.kbFilter.look === 'bw' && $('#filter-duotones .on')?.dataset.filter === 'duotone:#0b3954,#7fe7dc', 'choosing Ocean adds a duotone and keeps the look');
+      const duoPx = await pixelOf(duoPic.getSrc()), duoT = (duoPx[0] - 0x0b) / (0x7f - 0x0b);
+      step(duoT > 0.05 && duoT < 0.95 && [0x39, 0x54].every((d, i) => Math.abs(duoPx[i + 1] - (d + ([0xe7, 0xdc][i] - d) * duoT)) <= 4), () => 'its colours lie between the two Ocean colours: ' + duoPx);
+      put($('#duotone-dark'), '#000000', 'change'); put($('#duotone-light'), '#ff0000', 'change');
+      await until(() => duoPic.kbFilter?.duotone === '#000000,#ff0000', 'the colour pickers make a custom duotone');
+      const redPx = await pixelOf(duoPic.getSrc());
+      step(redPx[0] > 20 && redPx[1] <= 2 && redPx[2] <= 2, () => 'a black and red duotone has only reds: ' + redPx);
+      step(cleanFilter({ duotone: 'nonsense' }) === null && cleanFilter({ duotone: '' }) === null, 'a damaged or empty duotone is no filter');
+      $('#filter-duotones [data-filter="duotone:none"]').click();
+      await until(() => duoPic.kbFilter && !('duotone' in duoPic.kbFilter) && duoPic.kbFilter.look === 'bw', 'None takes the duotone off and keeps the look');
+    }
     // Clip art keeps its transparency.
     const clearCanvas = Object.assign(document.createElement('canvas'), { width: 40, height: 40 }), clearCtx = clearCanvas.getContext('2d');
     clearCtx.fillStyle = '#ff0000'; clearCtx.fillRect(0, 0, 20, 40);
@@ -2924,7 +3090,7 @@ const test = `<script>
       let pic = await settle(addImageBlob(await new Promise(r => c.toBlob(r, 'image/png')), 'effects'), 'a picture for effects');
       pic.set({ left: 100, top: 100, scaleX: 1, scaleY: 1, angle: 0 }); pic.setCoords(); commitDesign(); selectObjects([pic]); paintPanel();
       $('#prop-retouch').click(); $('#photo-tabs [data-photo-tab=effects]').click();
-      step(seen('#fun-list') && $('#fun-list').children.length === 4 && $('#light-dirs').children.length === 9 && $('#fun-back').disabled, 'Effects shows four effects, nine light directions, and nothing to go back to');
+      step(seen('#fun-list') && $('#fun-list').children.length === 5 && $('#fun-list [data-fun=poster]')?.textContent === 'Posterize' && $('#light-dirs').children.length === 9 && $('#fun-back').disabled, 'Effects shows five effects (Posterize too), nine light directions, and nothing to go back to');
       const red = async () => { const w = await touchPixels(pic.getSrc()); return w.ctx.getImageData(5, 5, 1, 1).data[0]; };
       const before = calls.length;
       $('#fun-list [data-fun=oil]').click();
@@ -2938,12 +3104,18 @@ const test = `<script>
       await until(() => !funFx.busy && calls.slice(before).some(c => c.command === 'relight_picture'), 'Relight');
       const lit = calls.slice(before).find(c => c.command === 'relight_picture');
       step(await red() === 130 && lit.options.headers.angle === '180' && lit.options.headers.amount === '60', 'a light goes on top of the effect:  (wrong colour)');
+      step($('#fun-sharp-out').textContent === 'off' && !calls.slice(before).some(c => c.command === 'deblur_picture'), 'Fix blur starts off');
+      const sharpOrder = calls.length; $('#fun-sharp').value = 40; $('#fun-sharp').dispatchEvent(new Event('input')); $('#fun-sharp').dispatchEvent(new Event('change'));
+      await until(() => !funFx.busy && calls.slice(sharpOrder).some(c => c.command === 'relight_picture'), 'Fix blur');
+      const sharpCalls = calls.slice(sharpOrder).map(c => c.command).filter(c => /_picture$/.test(c));
+      const sharpRed = await red();
+      step(Math.abs(sharpRed - 135) <= 1 && sharpCalls[0] === 'deblur_picture' && calls.slice(sharpOrder).find(c => c.command === 'deblur_picture').options.headers.amount === '40' && $('#fun-sharp-out').textContent === '40%', () => 'Fix blur goes first, under the effect and the light: ' + [sharpCalls, sharpRed, $('#fun-sharp-out').textContent, JSON.stringify(calls.slice(sharpOrder).find(c => c.command === 'deblur_picture').options.headers)]);
       $('#fun-back').click();
-      await until(() => !funFx.busy && !funFx.effect && !funFx.light, 'Back to the photo');
+      await until(() => !funFx.busy && !funFx.effect && !funFx.light && !funFx.sharp, 'Back to the photo');
       step(await red() === 100 && $('#fun-back').disabled, 'Back to the photo puts it back:  (wrong colour)');
       undoDesign(); await until(() => board.getObjects().find(o => o.kbName === 'Photo effects') && !board.getObjects().includes(pic), 'Undo');
       pic = board.getObjects().find(o => o.kbName === 'Photo effects'); selectObjects([pic]); paintFun();
-      step(await red() === 130 && !funFx.light && !funFx.base, 'Undo brings the lit picture back and starts afresh from it:  (wrong colour)');
+      step(await red() === sharpRed && !funFx.light && !funFx.base, 'Undo brings the lit picture back and starts afresh from it:  (wrong colour)');
       $('#fun-done').click();
       step(drawer !== 'retouch', 'Done puts Effects away');
       board.remove(board.getObjects().find(o => o.kbName === 'Photo effects')); commitDesign();

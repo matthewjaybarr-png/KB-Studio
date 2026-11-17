@@ -3,6 +3,38 @@
 // strokes already applied. At the default recipe a JPEG renders as itself; a RAW gets a gentle base look so it
 // starts close to what the camera would have made.
 
+// Colour mixer bands: key, name, centre as an OkLab hue in degrees (where pure sRGB red, yellow, green, cyan,
+// blue and magenta sit, orange and purple between), and a swatch for the band picker.
+const MIX_BANDS = [['red', 'Red', 29, '#e0403a'], ['orange', 'Orange', 60, '#ec8a2c'], ['yellow', 'Yellow', 110, '#e4cf30'], ['green', 'Green', 142, '#44b04a'],
+  ['aqua', 'Aqua', 195, '#3cc4c8'], ['blue', 'Blue', 264, '#3c64e0'], ['purple', 'Purple', 300, '#9a4ad8'], ['magenta', 'Magenta', 328, '#d840b4']];
+const MIX_KEYS = MIX_BANDS.flatMap(([band]) => ['H', 'S', 'L'].map(k => band + k));
+
+// Tone curve: four sliders raise or lower the curve at fixed points between black and white (each by up to
+// CURVE_REACH), and a monotone cubic (Fritsch-Carlson) joins the points, so the curve always rises and never overshoots.
+const CURVE_KEYS = [['curveShadows', 'Darkest'], ['curveDarks', 'Darks'], ['curveLights', 'Lights'], ['curveHighlights', 'Brightest']];
+const CURVE_X = [0, 0.2, 0.4, 0.6, 0.8, 1], CURVE_REACH = 0.15;
+// The points' heights and slopes for slider values a (-1 to 1 each): what the shader's u_curveY and u_curveM get.
+function curvePoints(a) {
+  const y = CURVE_X.map((x, i) => i && i < 5 ? x + a[i - 1] * CURVE_REACH : x);
+  for (let i = 1; i < 6; i++) y[i] = Math.min(1, Math.max(y[i], y[i - 1])); // pushed past a neighbour, it stops level with it
+  const step = 0.2, secant = y.slice(1).map((v, i) => (v - y[i]) / step);
+  const m = y.map((_, i) => i === 0 ? secant[0] : i === 5 ? secant[4] : secant[i - 1] * secant[i] <= 0 ? 0 : (secant[i - 1] + secant[i]) / 2);
+  // a stretch between two untouched points stays on the diagonal, so lifting Darks never dims the darkest greys
+  const off = [0, ...a, 0];
+  for (let i = 0; i < 5; i++) if (!off[i] && !off[i + 1] && y[i] === CURVE_X[i] && y[i + 1] === CURVE_X[i + 1]) m[i] = m[i + 1] = 1;
+  for (let i = 0; i < 5; i++) {
+    if (!secant[i]) { m[i] = m[i + 1] = 0; continue; }
+    const p = m[i] / secant[i], q = m[i + 1] / secant[i], t = p * p + q * q;
+    if (t > 9) { m[i] = 3 * p / Math.sqrt(t) * secant[i]; m[i + 1] = 3 * q / Math.sqrt(t) * secant[i]; }
+  }
+  return { y, m };
+}
+// The curve at display value v: the shader's toneCurve, for drawing it.
+function curveAt(v, { y, m }) {
+  const i = Math.min(4, Math.floor(v * 5)), t = v * 5 - i, t2 = t * t, t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * y[i] + (t3 - 2 * t2 + t) * 0.2 * m[i] + (-2 * t3 + 3 * t2) * y[i + 1] + (t3 - t2) * 0.2 * m[i + 1];
+}
+
 const SLIDERS = [
   { key: 'temp', label: 'Temperature', group: 'White balance', min: -100, max: 100, step: 1 },
   { key: 'tint', label: 'Tint', min: -100, max: 100, step: 1 },
@@ -12,8 +44,14 @@ const SLIDERS = [
   { key: 'shadows', label: 'Shadows', min: -100, max: 100, step: 1 },
   { key: 'whites', label: 'Whites', min: -100, max: 100, step: 1 },
   { key: 'blacks', label: 'Blacks', min: -100, max: 100, step: 1 },
+  ...CURVE_KEYS.map(([key, label], i) => ({ key, label, group: i ? undefined : 'Tone curve', min: -100, max: 100, step: 1 })),
+  { key: 'texture', label: 'Texture', group: 'Presence', min: -100, max: 100, step: 1 },
+  { key: 'clarity', label: 'Clarity', min: -100, max: 100, step: 1 },
+  { key: 'dehaze', label: 'Dehaze', min: -100, max: 100, step: 1 },
   { key: 'vibrance', label: 'Vibrance', group: 'Colour', min: -100, max: 100, step: 1 },
   { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1 },
+  ...MIX_BANDS.flatMap(([band, name], i) => ['Hue', 'Saturation', 'Luminance'].map((what, j) => ({
+    key: band + what[0], label: `${name} ${what.toLowerCase()}`, group: i + j ? undefined : 'Colour mixer', band, min: -100, max: 100, step: 1 }))),
   { key: 'lookAmount', label: 'Strength', group: 'Look', min: 0, max: 100, step: 1, default: 100, unit: '%' },
   { key: 'split', label: 'Amount', group: 'Split toning', min: 0, max: 100, step: 1 },
   { key: 'splitShadow', label: 'Shadow colour', min: 0, max: 359, step: 1, default: 220, unit: '°', hue: true },
@@ -26,7 +64,7 @@ const SLIDERS = [
   { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1 },
   { key: 'fade', label: 'Fade', min: 0, max: 100, step: 1 }
 ];
-const RECIPE_VERSION = 6;
+const RECIPE_VERSION = 11;
 const DETAIL_EDGE = 3072; // main.rs DEVELOP_EDGE: Develop's source is averaged down by the whole factor ceil(long side / this), which is also Detail's scale at full size
 const SETTINGS = [...SLIDERS.map(s => s.key), 'look']; // everything but retouch and crop: what copy, paste and presets carry
 
@@ -71,25 +109,69 @@ const validStroke = s => !!s && TOOLS[s.tool] && Number.isFinite(s.size) && s.si
   && (s.tool === 'soften' ? s.offset === undefined && (s.scaled === undefined || typeof s.scaled === 'boolean')
     : s.scaled === undefined && (NO_SOURCE[s.tool] ? s.offset === undefined : Array.isArray(s.offset) && s.offset.length === 2 && s.offset.every(v => Number.isFinite(v) && Math.abs(v) <= 1)));
 
-// Crop: a rectangle (x, y, w, h, 0–1) of the straightened photo, which is the upright photo turned
-// `angle` degrees clockwise about its centre (keeping its size), then cropped. Copied rather than shared
-// between photos, so it stays out of SETTINGS.
-const NO_CROP = { x: 0, y: 0, w: 1, h: 1, angle: 0 };
+// Crop: a rectangle (x, y, w, h, 0–1) of the straightened photo, which is the upright photo with its perspective
+// corrected (`vertical` and `horizontal`, −100–100, absent means 0), turned `angle` degrees clockwise about its centre
+// (keeping its size), then cropped. Copied rather than shared between photos, so it stays out of SETTINGS.
+const NO_CROP = { x: 0, y: 0, w: 1, h: 1, angle: 0, vertical: 0, horizontal: 0 };
 const MAX_ANGLE = 45;
+const CROP_KEYS = ['x', 'y', 'w', 'h', 'angle', 'vertical', 'horizontal'];
+const tilt = v => v === undefined || (Number.isFinite(v) && Math.abs(v) <= 100);
 const validCrop = c => !!c && ['x', 'y', 'w', 'h', 'angle'].every(k => Number.isFinite(c[k])) && c.x >= 0 && c.y >= 0 && c.w >= 0.001 && c.h >= 0.001
-  && c.x + c.w <= 1 + 1e-9 && c.y + c.h <= 1 + 1e-9 && Math.abs(c.angle) <= MAX_ANGLE;
-const sameCrop = (a, b) => ['x', 'y', 'w', 'h', 'angle'].every(k => a[k] === b[k]);
+  && c.x + c.w <= 1 + 1e-9 && c.y + c.h <= 1 + 1e-9 && Math.abs(c.angle) <= MAX_ANGLE && tilt(c.vertical) && tilt(c.horizontal);
+const sameCrop = (a, b) => CROP_KEYS.every(k => (a[k] || 0) === (b[k] || 0));
+
+// Local adjustments: up to 8 masks, each changing Light (exposure, ±2 stops at ±100), Warmth and Saturation
+// (−100–100) where it falls. Points are uv across the upright photo, as retouch strokes are, so a crop keeps them in
+// place. A gradient ('linear') has all of its effect at x0, y0 and none at x1, y1; a circle ('radial') at x, y with
+// radius r over the long edge has all of it inside half the radius, fading out to the edge, or outside if `invert`.
+// Copied rather than shared between photos, like the crop.
+const MASK_LIMIT = 8, MASK_KEYS = ['exposure', 'warmth', 'saturation'];
+const near = v => Number.isFinite(v) && v >= -1 && v <= 2;
+const validMask = m => !!m && MASK_KEYS.every(k => m[k] === undefined || (Number.isFinite(m[k]) && Math.abs(m[k]) <= 100))
+  && (m.kind === 'linear' ? [m.x0, m.y0, m.x1, m.y1].every(near) && Math.hypot(m.x1 - m.x0, m.y1 - m.y0) >= 0.001
+    : m.kind === 'radial' && near(m.x) && near(m.y) && Number.isFinite(m.r) && m.r >= 0.005 && m.r <= 3 && (m.invert === undefined || typeof m.invert === 'boolean'));
+const cleanMask = m => ({ kind: m.kind, ...Object.fromEntries((m.kind === 'linear' ? ['x0', 'y0', 'x1', 'y1'] : ['x', 'y', 'r']).map(k => [k, m[k]])),
+  ...m.kind === 'radial' && { invert: !!m.invert }, ...Object.fromEntries(MASK_KEYS.map(k => [k, m[k] || 0])) });
 
 // A saved recipe with any missing setting at its default, and nothing it doesn't know.
 const fullRecipe = (saved = {}) => ({
   ...Object.fromEntries(SLIDERS.map(s => [s.key, Number.isFinite(saved[s.key]) ? Math.min(s.max, Math.max(s.min, saved[s.key])) : s.default ?? 0])),
   look: lookOf(saved.look) ? saved.look : '',
   retouch: Array.isArray(saved.retouch) ? saved.retouch.filter(validStroke).slice(0, STROKE_LIMITS.strokes) : [],
-  crop: validCrop(saved.crop) ? { x: saved.crop.x, y: saved.crop.y, w: saved.crop.w, h: saved.crop.h, angle: saved.crop.angle } : NO_CROP
+  crop: validCrop(saved.crop) ? Object.fromEntries(CROP_KEYS.map(k => [k, saved.crop[k] || 0])) : NO_CROP,
+  masks: Array.isArray(saved.masks) ? saved.masks.filter(validMask).slice(0, MASK_LIMIT).map(cleanMask) : []
 });
-const isDefault = recipe => SLIDERS.every(s => recipe[s.key] === (s.default ?? 0)) && !recipe.look && !recipe.retouch?.length && sameCrop(recipe.crop || NO_CROP, NO_CROP);
-// A recipe's settings without its retouch strokes and crop, which belong to one photo.
+const isDefault = recipe => SLIDERS.every(s => recipe[s.key] === (s.default ?? 0)) && !recipe.look && !recipe.retouch?.length && !recipe.masks?.length && sameCrop(recipe.crop || NO_CROP, NO_CROP);
+// A recipe's settings without its retouch strokes, masks and crop, which belong to one photo.
 const settingsOf = recipe => Object.fromEntries(SETTINGS.map(key => [key, fullRecipe(recipe)[key]]));
+
+// Auto: Light settings for the photo as the rest of its recipe shows it (Light itself at zero): exposure brings its
+// middle tones to mid-grey, then the other sliders open up crushed shadows, pull back clipped highlights and stretch a
+// flat picture toward black and white. Reads small renders, so it costs a handful of GPU passes.
+const LIGHT_KEYS = ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks'];
+function autoLight(dev, recipe) {
+  const base = { ...fullRecipe(recipe), ...Object.fromEntries(LIGHT_KEYS.map(k => [k, 0])) };
+  const lumas = exposure => {
+    const d = dev.pixels({ ...base, exposure }, 128).data, l = new Float32Array(d.length / 4);
+    for (let i = 0; i < l.length; i++) l[i] = (0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]) / 255;
+    return l.sort();
+  };
+  const at = (l, q) => l[Math.min(l.length - 1, Math.floor(q * l.length))];
+  const middle = l => (at(l, 0.5) + l.reduce((a, b) => a + b, 0) / l.length) / 2; // median and mean: a dark backdrop doesn't take over
+  let lo = -2.5, hi = 2.5;
+  for (let i = 0; i < 9; i++) { const mid = (lo + hi) / 2; if (middle(lumas(mid)) < 0.45) lo = mid; else hi = mid; }
+  const exposure = Math.round((lo + hi) / 2 * 20) / 20, l = lumas(exposure), q = p => at(l, p);
+  const cap = (v, m) => Math.round(Math.max(-m, Math.min(m, v))) || 0;
+  const clipped = l.filter(v => v > 0.97).length / l.length, spread = q(0.95) - q(0.05);
+  return {
+    exposure,
+    highlights: clipped > 0.005 ? cap(-clipped * 600 - 10, 80) : 0,
+    shadows: q(0.1) < 0.08 ? cap((0.08 - q(0.1)) * 600, 60) : 0,
+    whites: q(0.995) < 0.94 ? cap((0.94 - q(0.995)) * 300, 60) : 0,
+    blacks: q(0.005) > 0.03 ? cap(-(q(0.005) - 0.03) * 400, 60) : 0,
+    contrast: spread < 0.55 ? cap((0.55 - spread) * 120, 40) : spread > 0.9 ? cap(-(spread - 0.9) * 150, 30) : 0
+  };
+}
 
 // White balance relative to as shot: warmer adds red and removes blue, positive tint removes green (magenta).
 // Normalised so a neutral grey keeps its brightness. Exactly [1, 1, 1] at 0, 0.
@@ -100,19 +182,27 @@ function whiteBalance(temp, tint) {
   return gains.map(v => v / luma);
 }
 
-// The crop as an affine map from output uv (0–1 across the cropped picture, top row 0) to source uv
-// (0–1 across the upright photo), [a, b, e, c, d, f] for x' = a x + b y + e, y' = c x + d y + f.
-// The turn is done in pixels, so a non-square photo isn't sheared.
+// How far the perspective sliders tilt at ±100: the far edge is drawn from this much less (or more) of the photo.
+const MAX_TILT = 0.6;
+// The crop as a map from output uv (0–1 across the cropped picture, top row 0) to source uv (0–1 across the upright
+// photo): a 3 × 3 matrix, row by row, on (x, y, 1), dividing by the third row. The turn is done in pixels, so a
+// non-square photo isn't sheared; the perspective is a keystone about the photo's centre, the identity at 0.
 function cropMap(crop, W, H) {
   const t = -crop.angle * Math.PI / 180, cos = Math.cos(t), sin = Math.sin(t);
   const px = [W * crop.w, W * (crop.x - 0.5)], py = [H * crop.h, H * (crop.y - 0.5)]; // straightened pixels from the centre
-  return [cos * px[0] / W, -sin * py[0] / W, (cos * px[1] - sin * py[1]) / W + 0.5,
+  const [a, b, e, c, d, f] = [cos * px[0] / W, -sin * py[0] / W, (cos * px[1] - sin * py[1]) / W + 0.5,
     sin * px[0] / H, cos * py[0] / H, (sin * px[1] + cos * py[1]) / H + 0.5];
+  const kv = (crop.vertical || 0) / 100 * MAX_TILT, kh = (crop.horizontal || 0) / 100 * MAX_TILT;
+  if (!kv && !kh) return [a, b, e, c, d, f, 0, 0, 1];
+  // corrected (X, Y) from the centre lands at (X, Y) / (1 − kv Y − kh X) on the photo: positive Vertical widens the top
+  const q = (kv + kh) / 4, K = [[1 - kh / 2, -kv / 2, q], [-kh / 2, 1 - kv / 2, q], [-kh, -kv, 1 + 2 * q]];
+  return K.flatMap(([p, r, s]) => [p * a + r * c, p * b + r * d, p * e + r * f + s]);
 }
-const mapPoint = ([a, b, e, c, d, f], [x, y]) => [a * x + b * y + e, c * x + d * y + f];
-const unmapPoint = ([a, b, e, c, d, f], [x, y]) => { const det = a * d - b * c, u = x - e, v = y - f; return [(d * u - b * v) / det, (a * v - c * u) / det]; };
+const mapPoint = ([a, b, e, c, d, f, g, h, i], [x, y]) => { const z = g * x + h * y + i; return [(a * x + b * y + e) / z, (c * x + d * y + f) / z]; };
+// The inverse map, through the adjugate (any scale of a homography is the same map).
+const unmapPoint = ([a, b, e, c, d, f, g, h, i], p) => mapPoint([d * i - f * h, e * h - b * i, b * f - e * d, f * g - c * i, a * i - e * g, e * c - a * f, c * h - d * g, b * g - a * h, a * d - b * c], p);
 // For the shader: column-major mat3.
-const cropMatrix = (crop, W, H) => { const [a, b, e, c, d, f] = cropMap(crop, W, H); return new Float32Array([a, c, 0, b, d, 0, e, f, 1]); };
+const cropMatrix = (crop, W, H) => { const [a, b, e, c, d, f, g, h, i] = cropMap(crop, W, H); return new Float32Array([a, c, g, b, d, h, e, f, i]); };
 
 // Whether every corner of the crop lands on the photo (and inside the straightened frame).
 const cropFits = (crop, W, H) => crop.x >= -1e-9 && crop.y >= -1e-9 && crop.x + crop.w <= 1 + 1e-9 && crop.y + crop.h <= 1 + 1e-9
@@ -137,8 +227,8 @@ function fitCrop(crop, W, H) {
 // readPixels (bottom row first) it must be at the bottom, hence u_flip.
 // v_uv is across the cropped picture (for the vignette and grain), v_src where that is on the photo.
 const VERTEX = `#version 300 es
-in vec2 a_pos; out vec2 v_uv, v_src; uniform bool u_flip; uniform mat3 u_crop; uniform vec4 u_view; // u_view: the part of the picture drawn, x, y, width, height (0–1)
-void main() { v_uv = u_view.xy + (vec2(a_pos.x, u_flip ? a_pos.y : -a_pos.y) * 0.5 + 0.5) * u_view.zw; v_src = (u_crop * vec3(v_uv, 1)).xy; gl_Position = vec4(a_pos, 0, 1); }`;
+in vec2 a_pos; out vec2 v_uv; out vec3 v_src; uniform bool u_flip; uniform mat3 u_crop; uniform vec4 u_view; // u_view: the part of the picture drawn, x, y, width, height (0–1)
+void main() { v_uv = u_view.xy + (vec2(a_pos.x, u_flip ? a_pos.y : -a_pos.y) * 0.5 + 0.5) * u_view.zw; v_src = u_crop * vec3(v_uv, 1); gl_Position = vec4(a_pos, 0, 1); }`;
 
 const FRAGMENT = `#version 300 es
 precision highp float;
@@ -149,13 +239,25 @@ uniform float u_exposure, u_contrast, u_highlights, u_shadows, u_whites, u_black
 // The look, and the finishing that goes on any photo.
 uniform float u_look, u_mono, u_lookContrast, u_lookSat, u_fade, u_grain, u_vignette;
 uniform vec3 u_filter, u_lift, u_gamma, u_gain;
-uniform float u_detailScale, u_sharpen, u_sharpenMask, u_nrColour, u_nrLuma;
+uniform float u_detailScale, u_sharpen, u_sharpenMask, u_nrColour, u_nrLuma, u_texture, u_clarity, u_dehaze;
 uniform vec2 u_toneLo, u_toneHi, u_splitLo, u_splitHi, u_grainScale;
-in vec2 v_uv, v_src; out vec4 color;
+// Tone curve (curvePoints): heights and slopes at display values 0, 0.2 ... 1.
+uniform bool u_curve; uniform float u_curveY[6], u_curveM[6];
+// Colour mixer: per band hue (-1..1 = -30..30 degrees), saturation and luminance (-1..1), band centres in OkLab degrees.
+uniform bool u_mix; uniform float u_mixH[8], u_mixS[8], u_mixL[8], u_mixAt[8];
+uniform int u_masks; uniform vec4 u_maskGeo[8]; uniform float u_maskKind[8], u_maskSat[8]; uniform vec3 u_maskGain[8]; uniform vec2 u_aspect;
+in vec2 v_uv; in vec3 v_src; out vec4 color;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
 vec3 toSrgb(vec3 x) { x = max(x, 0.0); return mix(12.92 * x, 1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, x)); }
 vec3 toLinear(vec3 x) { return mix(x / 12.92, pow((x + 0.055) / 1.055, vec3(2.4)), step(0.04045, x)); }
+
+// The tone curve at display value v (curveAt in JS).
+float toneCurve(float v) {
+  int i = min(4, int(v * 5.0));
+  float t = v * 5.0 - float(i), t2 = t * t, t3 = t2 * t;
+  return clamp((2.0 * t3 - 3.0 * t2 + 1.0) * u_curveY[i] + (t3 - 2.0 * t2 + t) * 0.2 * u_curveM[i] + (-2.0 * t3 + 3.0 * t2) * u_curveY[i + 1] + (t3 - t2) * 0.2 * u_curveM[i + 1], 0.0, 1.0);
+}
 
 // Contrast as a power curve each side of a mid-grey pivot: keeps 0 and 1, steeper or flatter in between.
 vec3 contrast(vec3 d, float a) {
@@ -276,14 +378,46 @@ vec3 detail(vec2 uv) {
     float g = (target + 0.01) / (p0 + 0.01);
     c *= clamp(g * g, 0.5, 2.0);
   }
+  // Texture (fine detail, a ring 3 proxy pixels out) and Clarity (midtone local contrast, rings 12 and 24 out): the texel's
+  // perceptual luma pushed away from (or toward) its surroundings' average, as one gain on c so colour stays put.
+  if (u_texture != 0.0 || u_clarity != 0.0) {
+    float p0 = yp(c), target = p0;
+    if (u_texture != 0.0) {
+      float sum = 0.0;
+      for (int i = 0; i < 8; i++) { float a = float(i) * 0.7853982; sum += yp(box(uv + vec2(cos(a), sin(a)) * 3.0 * px)); }
+      target += (p0 - sum / 8.0) * u_texture * (u_texture > 0.0 ? 1.5 : 0.8);
+    }
+    if (u_clarity != 0.0) {
+      float sum = 0.0;
+      for (int i = 0; i < 16; i++) {
+        float a = float(i) * 0.7853982 + (i < 8 ? 0.0 : 0.3927);
+        sum += yp(box(uv + vec2(cos(a), sin(a)) * (i < 8 ? 24.0 : 12.0) * px));
+      }
+      float q = clamp(p0, 0.0, 1.0), mid = 4.0 * q * (1.0 - q); // easing off in deep shadows and bright highlights
+      target += (p0 - sum / 16.0) * u_clarity * (u_clarity > 0.0 ? 1.0 : 0.6) * mid;
+    }
+    float g = (max(target, 0.0) + 0.01) / (p0 + 0.01);
+    c *= clamp(g * g, 0.4, 2.5);
+  }
   return c;
 }
 
 void main() {
   // Off the photo (the corners of a turned photo while cropping): the editor's background.
-  vec2 margin = 0.5 / vec2(textureSize(u_src, 0));
-  if (any(lessThan(v_src, -margin)) || any(greaterThan(v_src, 1.0 + margin))) { color = vec4(0.043, 0.047, 0.063, 1); return; }
-  vec3 c = detail(v_src) * u_wb * u_exposure;
+  vec2 margin = 0.5 / vec2(textureSize(u_src, 0)), src = v_src.xy / v_src.z; // divided here, so a perspective stays straight
+  if (any(lessThan(src, -margin)) || any(greaterThan(src, 1.0 + margin))) { color = vec4(0.043, 0.047, 0.063, 1); return; }
+  vec3 c = detail(src) * u_wb * u_exposure;
+  // Local adjustments, in linear light like exposure and white balance. Distances are in photo pixels over the long edge.
+  for (int i = 0; i < u_masks; i++) {
+    vec4 g = u_maskGeo[i];
+    vec2 p = src * u_aspect;
+    float w;
+    if (u_maskKind[i] == 0.0) { vec2 a = g.xy * u_aspect, d = g.zw * u_aspect - a; w = 1.0 - smoothstep(0.0, 1.0, dot(p - a, d) / dot(d, d)); }
+    else { w = 1.0 - smoothstep(0.5, 1.0, length(p - g.xy * u_aspect) / g.z); if (u_maskKind[i] == 2.0) w = 1.0 - w; }
+    c *= mix(vec3(1), u_maskGain[i], w);
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    c = max(mix(vec3(l), c, 1.0 + u_maskSat[i] * w), 0.0);
+  }
   vec3 d = clamp(u_raw ? baseLook(c) : toSrgb(c), 0.0, 1.0);
   // Tone, on display values. Each term is zero at 0 and keeps the curve rising.
   if (u_contrast != 0.0) d = contrast(d, u_contrast);
@@ -292,12 +426,36 @@ void main() {
   d += u_whites * 0.25 * d * d;
   d += u_blacks * 0.15 * (1.0 - d) * (1.0 - d);
   d = clamp(d, 0.0, 1.0);
+  if (u_curve) d = vec3(toneCurve(d.r), toneCurve(d.g), toneCurve(d.b));
+  // Dehaze: take away (or add) an even veil of light, then win back (or give up) the colour the veil hid. Greys stay grey.
+  if (u_dehaze != 0.0) {
+    float veil = u_dehaze * 0.12;
+    d = u_dehaze > 0.0 ? clamp((d - veil) / (1.0 - veil), 0.0, 1.0) : mix(d, vec3(0.82), -u_dehaze * 0.4);
+    vec3 lab = oklab(toLinear(d));
+    lab.yz *= 1.0 + u_dehaze * 0.35;
+    d = toSrgb(clamp(fromOklab(lab), 0.0, 1.0));
+  }
   if (u_vibrance != 0.0 || u_saturation != 0.0) {
     vec3 lab = oklab(toLinear(d));
     float chroma = length(lab.yz), hue = atan(lab.z, lab.y);
     // Vibrance lifts muted colours most and goes easy on skin (OkLab hue about 1 radian).
     float skin = u_vibrance > 0.0 ? 1.0 - 0.6 * exp(-pow((hue - 1.0) / 0.4, 2.0)) : 1.0;
     lab.yz *= (1.0 + u_saturation) * (1.0 + u_vibrance * (1.0 - smoothstep(0.0, 0.25, chroma)) * skin);
+    d = toSrgb(clamp(fromOklab(lab), 0.0, 1.0));
+  }
+  if (u_mix) {
+    vec3 lab = oklab(toLinear(d));
+    float chroma = length(lab.yz), hue = degrees(atan(lab.z, lab.y));
+    if (hue < u_mixAt[0]) hue += 360.0;
+    // The two bands the hue lies between, blended smoothly, so neighbouring bands overlap with no hard edge.
+    int i = 7;
+    for (int k = 0; k < 7; k++) if (hue >= u_mixAt[k] && hue < u_mixAt[k + 1]) i = k;
+    int j = (i + 1) % 8;
+    float to = i == 7 ? u_mixAt[0] + 360.0 : u_mixAt[j], t = smoothstep(u_mixAt[i], to, hue);
+    float h = mix(u_mixH[i], u_mixH[j], t), s = mix(u_mixS[i], u_mixS[j], t), l = mix(u_mixL[i], u_mixL[j], t);
+    float a = radians(h * 30.0), colourful = smoothstep(0.0, 0.06, chroma); // greys have no hue, so they stay put
+    lab.yz = mat2(cos(a), sin(a), -sin(a), cos(a)) * lab.yz * (1.0 + s);
+    lab.x *= 1.0 + 0.4 * l * colourful;
     d = toSrgb(clamp(fromOklab(lab), 0.0, 1.0));
   }
   if (u_look > 0.0) {
@@ -397,6 +555,20 @@ class Developer {
     gl.uniform3fv(u('u_wb'), whiteBalance(r.temp, r.tint));
     gl.uniform1f(u('u_exposure'), 2 ** r.exposure);
     for (const key of ['contrast', 'highlights', 'shadows', 'whites', 'blacks', 'vibrance', 'saturation', 'vignette']) gl.uniform1f(u('u_' + key), r[key] / 100);
+    const curve = curvePoints(CURVE_KEYS.map(([key]) => r[key] / 100));
+    gl.uniform1i(u('u_curve'), CURVE_KEYS.some(([key]) => r[key]) ? 1 : 0);
+    gl.uniform1fv(u('u_curveY'), curve.y);
+    gl.uniform1fv(u('u_curveM'), curve.m);
+    gl.uniform1i(u('u_mix'), MIX_KEYS.some(k => r[k]) ? 1 : 0);
+    for (const k of 'HSL') gl.uniform1fv(u('u_mix' + k), MIX_BANDS.map(([band]) => r[band + k] / 100));
+    gl.uniform1fv(u('u_mixAt'), MIX_BANDS.map(b => b[2]));
+    const m = r.masks, pad = (list, n) => [...list.flat(), ...Array(8 * n - list.flat().length).fill(0)];
+    gl.uniform1i(u('u_masks'), m.length);
+    gl.uniform2f(u('u_aspect'), this.width / Math.max(this.width, this.height), this.height / Math.max(this.width, this.height));
+    gl.uniform4fv(u('u_maskGeo'), pad(m.map(k => k.kind === 'linear' ? [k.x0, k.y0, k.x1, k.y1] : [k.x, k.y, k.r, 0]), 4));
+    gl.uniform1fv(u('u_maskKind'), pad(m.map(k => k.kind === 'linear' ? 0 : k.invert ? 2 : 1), 1));
+    gl.uniform1fv(u('u_maskSat'), pad(m.map(k => k.saturation / 100), 1));
+    gl.uniform3fv(u('u_maskGain'), pad(m.map(k => whiteBalance(k.warmth, 0).map(v => v * 2 ** (k.exposure / 50))), 3));
     const look = lookOf(r.look) || {}, amount = look.id ? r.lookAmount / 100 : 0;
     const tint = ([hue, amount] = [0, 0], k = 1) => [k * amount * Math.cos(hue * Math.PI / 180), k * amount * Math.sin(hue * Math.PI / 180)];
     gl.uniform1f(u('u_look'), amount);
@@ -412,7 +584,7 @@ class Developer {
     gl.uniform2fv(u('u_splitLo'), tint([r.splitShadow, 0.08], r.split / 100));
     gl.uniform2fv(u('u_splitHi'), tint([r.splitHighlight, 0.08], r.split / 100));
     gl.uniform1f(u('u_detailScale'), detailScale(this.width, this.height));
-    for (const key of ['sharpen', 'sharpenMask', 'nrColour', 'nrLuma']) gl.uniform1f(u('u_' + key), r[key] / 100);
+    for (const key of ['sharpen', 'sharpenMask', 'nrColour', 'nrLuma', 'texture', 'clarity', 'dehaze']) gl.uniform1f(u('u_' + key), r[key] / 100);
     gl.uniform1f(u('u_fade'), Math.min(1, (look.fade || 0) * amount + r.fade / 100));
     gl.uniform1f(u('u_grain'), Math.min(1, (look.grain || 0) * amount + r.grain / 100));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
