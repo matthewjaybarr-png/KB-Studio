@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Create: Shift-clicking one object out of a turned or resized group of selected objects keeps the selection box turned, and hovering a handle over another object reports the hover as before the engine change. The canvas engine check passes again.
 - Create has Check spelling (in File, and in the Text panel): it reads every text box on every page in US English, shows each word it doesn't know with close words to change it to, and lets you Skip this word or Add to my words. Names in My lists are never questioned, and My words in the same window takes a word back out.
 - Classroom's Posters and wall cards has Feelings: sixteen "I feel" cards with a face and its word, from Happy to Sleepy, four to a page or one big card a page.
 - Classroom's Puzzles and worksheets has Picture sudoku, under Thinking and puzzles: a 4 × 4 grid of pictures or the numbers 1 to 4 with 5, 7 or 9 squares to find, the missing squares to cut out and stick in, and an answer key.
