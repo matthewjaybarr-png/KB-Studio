@@ -38,8 +38,9 @@ async function itemPic(item, cx, cy, size) {
   return image;
 }
 function paintSheetPhotos() {
-  const what = sheet.kind === 'bingo' ? $('#sheet-bingo-what').value : sheet.kind === 'memory' ? $('#sheet-memory-what').value : '';
-  $('#sheet-photos-row').hidden = $('#sheet-photos-hint').hidden = !what.startsWith('photo');
+  const strips = sheet.kind === 'strips', what = sheet.kind === 'bingo' ? $('#sheet-bingo-what').value : sheet.kind === 'memory' ? $('#sheet-memory-what').value : '';
+  $('#sheet-photos-row').hidden = !strips && !what.startsWith('photo');
+  $('#sheet-photos-hint').hidden = strips || !what.startsWith('photo'); // file names don't matter to the strip puzzle
   $('#sheet-photos-count').textContent = sheetPhotos.length ? `${sheetPhotos.length} photo${sheetPhotos.length === 1 ? '' : 's'} chosen` : 'None chosen yet';
 }
 $('#sheet-photos-add').onclick = () => $('#sheet-photos-file').click();
@@ -342,6 +343,27 @@ function traceWordsPages(title, lines, copy) {
   return pages;
 }
 
+// ---- Number strip puzzle: one of her photos cut into strips with a number under each, to put back in counting order ----
+const stripNumbers = (count, by) => Array.from({ length: count }, (_, i) => (i + 1) * by);
+// The photo as big as the page takes, cut to a shape between tall (4:5) and wide (8:5) so a strip is never a sliver.
+async function stripPhoto(file) {
+  const bitmap = await createImageBitmap(file), shape = Math.min(1.6, Math.max(0.8, bitmap.width / bitmap.height));
+  const w = Math.round(Math.min(696, 640 * shape)), h = Math.round(w / shape), out = Object.assign(document.createElement('canvas'), { width: w * 2, height: h * 2 });
+  const cut = Math.min(bitmap.width, bitmap.height * shape);
+  out.getContext('2d').drawImage(bitmap, (bitmap.width - cut) / 2, (bitmap.height - cut / shape) / 2, cut, cut / shape, 0, 0, w * 2, h * 2);
+  bitmap.close?.();
+  return { url: out.toDataURL('image/jpeg', 0.88), w, h };
+}
+async function stripPage(title, file, numbers) {
+  const { url, w, h } = await stripPhoto(file), left = (816 - w) / 2, top = 205, cell = w / numbers.length, box = 84;
+  const image = await kbe.FabricImage.fromURL(url);
+  image.set({ left, top, scaleX: w / image.width, scaleY: h / image.height, kbName: 'Photo to cut' });
+  const parts = [...preHeader(title), T('Cut along the dotted lines. Put the strips in counting order to make the picture.', 60, 158, { width: 696, textAlign: 'center', fontSize: 18, fill: '#555555', kbName: 'What to do' }), image];
+  numbers.forEach((n, i) => parts.push(R(left + i * cell, top, cell, h + box, { stroke: '#999999', strokeWidth: 1.5, strokeDashArray: [8, 6], kbName: 'Line to cut' }),
+    fitText(String(n), left + i * cell + 4, top + h + 6, cell - 8, box - 12, { fontSize: 46, kbName: 'Strip number' })));
+  return toPage(parts.filter(Boolean));
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
@@ -413,6 +435,14 @@ Object.assign(SHEET_KINDS, {
       if (skipped.length) notes.push(`Left out (no letters it can draw): ${skipped.join(', ')}.`);
       if (small.length) notes.push(`Long, so written smaller: ${small.join(', ')}.`);
       return { pages: traceWordsPages(title, lines, $('#sheet-trace-copy').checked), note: notes.join(' ') };
+    } },
+  strips: { title: 'Number strip puzzle', words: false, key: false,
+    async make(title) {
+      if (!sheetPhotos.length) return { error: 'Choose a photo first. Each photo you choose makes its own puzzle page.' };
+      const numbers = stripNumbers(+$('#sheet-strips-count').value, +$('#sheet-strips-by').value), pages = [];
+      try { for (const file of sheetPhotos.slice(0, 12)) pages.push(await stripPage(title, file, numbers)); }
+      catch (error) { return { error: 'One of the photos could not be opened. Try a JPG or PNG.' }; }
+      return { pages, note: sheetPhotos.length > 12 ? 'Made the first 12 photos.' : '' };
     } }
 });
 const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; paintSheetPhotos(); };
@@ -426,4 +456,5 @@ $('#sheet-missing').onclick = () => openSheet('missing');
 $('#sheet-scramble').onclick = () => openSheet('scramble');
 $('#sheet-sudoku').onclick = () => openSheet('sudoku');
 $('#sheet-trace-words').onclick = () => openSheet('trace-words');
+$('#sheet-strips').onclick = () => { openSheet('strips'); paintSheetPhotos(); };
 $('#sheet-feelings-cards').onclick = () => openSheet('feelings-cards');

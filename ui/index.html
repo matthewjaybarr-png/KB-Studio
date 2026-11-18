@@ -121,12 +121,14 @@
       <label data-kinds="clock">Times <select id="sheet-clock-level"><option value="hour">O'clock only (3:00)</option><option value="half" selected>O'clock and half past (3:30)</option><option value="quarter">Quarter hours too (3:15, 3:45)</option><option value="five">Every five minutes (3:25)</option></select></label>
       <label data-kinds="clock">They <select id="sheet-clock-mode"><option value="read">Write the time under each clock</option><option value="draw">Draw the hands on each clock</option></select></label>
       <label data-kinds="memory">Pairs of <select id="sheet-memory-what"><option value="same">The same picture twice</option><option value="words">A picture and its word</option><option value="letters">A big letter and its small letter</option><option value="numbers">A number and that many dots</option><option value="photos">My photos: the same photo twice</option><option value="photo-names">My photos: a photo and its name</option></select></label>
-      <div id="sheet-photos-row" data-kinds="bingo memory" class="row"><button id="sheet-photos-add" type="button">📷 Choose photos…</button><span id="sheet-photos-count" class="hint"></span><input id="sheet-photos-file" type="file" accept="image/*" multiple hidden></div>
+      <div id="sheet-photos-row" data-kinds="bingo memory strips" class="row"><button id="sheet-photos-add" type="button">📷 Choose photos…</button><span id="sheet-photos-count" class="hint"></span><input id="sheet-photos-file" type="file" accept="image/*" multiple hidden></div>
       <p id="sheet-photos-hint" class="hint" data-kinds="bingo memory">Each photo is called by its file name (ava.jpg is “ava”), so name the files first if the names matter.</p>
       <label data-kinds="memory">How many pairs <select id="sheet-memory-pairs"><option value="6">6 (one page)</option><option value="9">9</option><option value="12">12 (two pages)</option></select></label>
       <label data-kinds="missing">Count up to <select id="sheet-missing-upto"><option>10</option><option selected>20</option><option>30</option><option>50</option><option>100</option></select></label>
       <label data-kinds="missing">Leave out <select id="sheet-missing-share"><option value="few">A few numbers</option><option value="half" selected>About half</option><option value="most">Most of them</option></select></label>
       <label data-kinds="scramble" class="check"><input id="sheet-scramble-bank" type="checkbox" checked> Word bank at the bottom</label>
+      <label data-kinds="strips">Strips <select id="sheet-strips-count"><option value="5">5 (easier)</option><option value="10" selected>10</option></select></label>
+      <label data-kinds="strips">Numbers <select id="sheet-strips-by"><option value="1" selected>Count in ones: 1, 2, 3</option><option value="2">Count in twos: 2, 4, 6</option><option value="5">Count in fives: 5, 10, 15</option><option value="10">Count in tens: 10, 20, 30</option></select></label>
       <label data-kinds="sudoku">Sudoku with <select id="sheet-sudoku-what"><option value="pictures">Pictures</option><option value="numbers">Numbers 1 to 4</option></select></label>
       <label data-kinds="sudoku">How hard <select id="sheet-sudoku-level"><option value="easy">Easy: 5 to find</option><option value="medium" selected>Medium: 7 to find</option><option value="hard">Hard: 9 to find</option></select></label>
       <label data-kinds="trace-words" class="check"><input id="sheet-trace-copy" type="checkbox" checked> A line under each to write it again</label>
@@ -343,6 +345,7 @@
             <button id="sheet-dots" type="button">⭐ Dot-to-dot</button>
             <button id="sheet-maze" type="button">🐰 Maze</button>
             <button id="sheet-sudoku" type="button">🧠 Picture sudoku</button>
+            <button id="sheet-strips" type="button">✂️ Number strip puzzle (from a photo)</button>
           </div>
           <h4 class="sheet-group">Games</h4>
           <div class="sheet-buttons">

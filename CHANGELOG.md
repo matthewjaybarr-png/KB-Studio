@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Classroom's Puzzles and worksheets has a Number strip puzzle, under Thinking and puzzles: choose a photo and it is cut into 5 or 10 strips with a number under each (counting in ones, twos, fives or tens). The children cut the strips out and put them in counting order to make the picture again. Each photo you choose makes its own page.
 - Classroom's Puzzles and worksheets has Trace words or a sentence, under Writing: your own words or short sentences (or one of your lists) in dotted letters to trace, with a line under each to write it again if you want one.
 - Bingo and the Memory game can use My photos: choose up to 60 photos in the window (the children, things in the room) and they go on the cards, each called by its file name. The Memory game can pair a photo with itself or with its name.
 - A desk in a Seating plan has Change name in the toolbar, so you no longer need to ungroup it. Bingo with your own words writes them all the same size.

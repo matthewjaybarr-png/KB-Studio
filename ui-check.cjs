@@ -3326,6 +3326,16 @@ const test = `<script>
           $('#sheet-bingo').click(); step(getComputedStyle($('#sheet-photos-row')).display === 'none' && getComputedStyle($('#sheet-photos-hint')).display === 'none', 'the photo chooser is hidden until My photos is picked');
           $('#sheet-bingo-what').value = 'photos'; $('#sheet-bingo-what').onchange(); $('#sheet-bingo-size').value = '3'; step(getComputedStyle($('#sheet-photos-row')).display !== 'none' && /None/.test($('#sheet-photos-count').textContent), 'Bingo with My photos asks for photos');
           $('#sheet-make').click(); await until(() => /needs at least 9 photos, and there are 0 chosen/.test($('#sheet-note').textContent), () => 'bingo says how many photos it needs: ' + $('#sheet-note').textContent); $('#sheet-close').click();
+          // Number strip puzzle: a photo in strips with the counting numbers under them, a page for each photo.
+          step(stripNumbers(5, 1).join() === '1,2,3,4,5' && stripNumbers(10, 10)[9] === 100 && stripNumbers(5, 2).join() === '2,4,6,8,10', 'strip numbers count in ones, twos or tens');
+          sheetPhotos = [];
+          $('#sheet-strips').click(); step(getComputedStyle($('#sheet-photos-row')).display !== 'none' && getComputedStyle($('#sheet-photos-hint')).display === 'none' && shownRow('#sheet-strips-count') && !shownRow('#sheet-key') && $('#sheet-words-part').hidden, 'the strip puzzle asks for a photo and how to count');
+          $('#sheet-make').click(); await until(() => /Choose a photo first/.test($('#sheet-note').textContent), 'the strip puzzle says it needs a photo'); $('#sheet-close').click();
+          sheetPhotos = files.slice(0, 2);
+          await made('#sheet-strips', () => { $('#sheet-strips-count').value = '5'; $('#sheet-strips-by').value = '2'; },
+            pages => pages.length === 2 && pages[0].objects.filter(o => o.kbName === 'Line to cut').length === 5 && pages[0].objects.filter(o => o.kbName === 'Strip number').map(o => o.text).join() === '2,4,6,8,10' && pages[0].objects.filter(o => o.kbName === 'Photo to cut' && o.src.startsWith('data:image/jpeg')).length === 1
+              && (() => { const ph = pages[0].objects.find(o => o.kbName === 'Photo to cut'), w = ph.width * ph.scaleX; return Math.abs(w - 696) < 2 && Math.abs(ph.left + w / 2 - 408) < 2; })(), 'Number strip puzzle');
+          $('#sheet-strips-count').value = '10'; $('#sheet-strips-by').value = '1';
           sheetPhotos = files;
           await made('#sheet-bingo', () => { $('#sheet-bingo-what').value = 'photos'; $('#sheet-bingo-what').onchange(); $('#sheet-bingo-size').value = '3'; $('#sheet-bingo-count').value = '6'; step(/10 photos chosen/.test($('#sheet-photos-count').textContent), 'the window says how many photos are chosen'); },
             pages => pages.length === 7 && pages[0].objects.filter(o => /^Photo /.test(o.kbName)).length === 9 && pages[0].objects.filter(o => /^image$/i.test(o.type)).every(o => o.src.startsWith('data:image/jpeg')) && pages[6].objects.filter(o => o.kbName === 'Square words').map(o => o.text).includes('ben lee'), 'Photo bingo');
