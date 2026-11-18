@@ -201,13 +201,21 @@ class ActiveSelection extends Group {
     const order = this.canvas ? this.canvas._objects : []; this._objects = [...list].sort((a, b) => order.indexOf(a) - order.indexOf(b));
     this._layout({}); for (const o of this._objects) o.group = this;
   }
-  add(o) { const keep = this._objects.filter(c => c !== o); this.setObjects([...keep, o]); }
-  remove(o) { // as Fabric: the box keeps its turn and size and is refitted around the ones left
-    const m = this.calcOwnMatrix(), back = inv(m); this._restoreChildren(o); this._objects = this._objects.filter(c => c !== o); if (!this._objects.length) return;
-    const pts = this._objects.flatMap(c => c.getCoords().map(q => tp(q, back))), xs = pts.map(q => q.x), ys = pts.map(q => q.y), x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0, h = Math.max(...ys) - y0, mid = new Point(x0 + w / 2, y0 + h / 2);
+  // as Fabric: the box keeps its turn and size when one joins or leaves, and is refitted around its objects
+  _refit(m) {
+    if (!this._objects.length) return;
+    const back = inv(m), pts = this._objects.flatMap(c => c.getCoords().map(q => tp(q, back))), xs = pts.map(q => q.x), ys = pts.map(q => q.y), x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0, h = Math.max(...ys) - y0, mid = new Point(x0 + w / 2, y0 + h / 2);
     for (const c of this._objects) c.setCenterPoint(c.getRelativeCenterPoint().subtract(mid));
     this.width = w; this.height = h; this.setPositionByOrigin(tp(mid, m), 'center', 'center');
   }
+  add(o) {
+    if (this._objects.includes(o)) return;
+    const m = this.calcOwnMatrix(), d = decompose(mul(inv(m), o.calcOwnMatrix())), order = this.canvas ? this.canvas._objects : [];
+    Object.assign(o, { angle: d.angle, skewX: d.skewX, skewY: d.skewY, flipX: d.scaleX < 0, flipY: d.scaleY < 0 }); o.scaleX = Math.abs(d.scaleX); o.scaleY = Math.abs(d.scaleY);
+    o.setPositionByOrigin(new Point(d.translateX, d.translateY), 'center', 'center'); o.group = this;
+    this._objects = [...this._objects, o].sort((a, b) => order.indexOf(a) - order.indexOf(b)); this._refit(m);
+  }
+  remove(o) { const m = this.calcOwnMatrix(); this._restoreChildren(o); this._objects = this._objects.filter(c => c !== o); this._refit(m); }
   contains(o) { return this._objects.includes(o); }
   size() { return this._objects.length; }
   item(i) { return this._objects[i]; }
@@ -440,7 +448,7 @@ class Canvas extends StaticCanvas {
     const old = this.getActiveObjects();
     if (a instanceof ActiveSelection) {
       if (target.group === a) { a.remove(target); this._hovered = target; if (a.size() === 1) { this._setActive(a.item(0), e); this._fireSelection(old, e); return; } }
-      else a.add(target);
+      else { a.add(target); this._hovered = a; }
     } else { const g = this._groupOf(...(this._objects.indexOf(a) < this._objects.indexOf(target) ? [a, target] : [target, a])); this._setActive(g, e); this._hovered = g; }
     this._fireSelection(old, e);
   }
