@@ -323,6 +323,25 @@ async function feelingCard([word, face], x, y, w, h, i) {
     cardWords(word, x, y + h * 0.78, w, h * 0.11, { fill: CARD_COLOURS[i % CARD_COLOURS.length][1] })];
 }
 
+// ---- Trace the words: her own words or short sentences in dotted ball-and-stick letters, a row each ----
+// Six rows a page: a word a row, or (with `copy`) a word and an empty row under it to write it again.
+function traceWordsPages(title, lines, copy) {
+  const per = copy ? 3 : 6, pitch = 820 / 6, pages = [];
+  for (let first = 0; first < lines.length; first += per) {
+    const parts = [...preHeader(title)];
+    for (const [i, text] of lines.slice(first, first + per).entries()) {
+      const k = nameK(text), row = copy ? i * 2 : i;
+      for (const r of copy ? [row, row + 1] : [row]) {
+        const top = 175 + r * pitch + 8 * k;
+        parts.push(...writingLines(60, top, 696, k));
+        if (r === row) parts.push(traceText(text, 68, top, k, true));
+      }
+    }
+    pages.push(toPage(parts.filter(Boolean)));
+  }
+  return pages;
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
@@ -374,7 +393,27 @@ Object.assign(SHEET_KINDS, {
       return { pages: [await sudokuPage(title, s, items, false), ...(key ? [await sudokuPage(title, s, items, true)] : [])] };
     } },
   'feelings-cards': { title: 'Feelings', words: false, key: false,
-    async make() { return { pages: await cardPages(FEELINGS, cardLayout(), feelingCard), note: `${FEELINGS.length} feelings, from Happy to Sleepy.` }; } }
+    async make() { return { pages: await cardPages(FEELINGS, cardLayout(), feelingCard), note: `${FEELINGS.length} feelings, from Happy to Sleepy.` }; } },
+  'trace-words': { title: 'Trace the words', words: true, key: false, wordsLabel: 'Words or short sentences', hint: 'One per line. A long sentence carries on to the next row. Pick one of your lists above to fill it in.', placeholder: 'cat\ndog\nI can see the sun',
+    async make(title, key, seed, words) {
+      const typed = words.split(/\r?\n/).map(w => w.trim()).filter(Boolean), lines = [], skipped = [];
+      for (const raw of typed) {
+        const text = traceable(raw.replace(/\s+/g, ' ')).trim();
+        if (!text) { skipped.push(raw); continue; }
+        // A sentence too long for one row at a size a child can trace goes on to the next rows.
+        let row = '';
+        for (const word of text.split(' ').filter(Boolean)) {
+          if (row && nameK(row + ' ' + word) < NAME_MIN_K) { lines.push(row); row = word; } else row += (row ? ' ' : '') + word;
+        }
+        lines.push(row);
+      }
+      lines.length = Math.min(lines.length, 24);
+      if (!lines.length) return { error: skipped.length ? `These have no letters it can draw (only A to Z and numbers): ${skipped.join(', ')}.` : 'Type a few words first, one per line.' };
+      const small = lines.filter(l => nameK(l) < NAME_MIN_K), notes = [];
+      if (skipped.length) notes.push(`Left out (no letters it can draw): ${skipped.join(', ')}.`);
+      if (small.length) notes.push(`Long, so written smaller: ${small.join(', ')}.`);
+      return { pages: traceWordsPages(title, lines, $('#sheet-trace-copy').checked), note: notes.join(' ') };
+    } }
 });
 const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; paintSheetPhotos(); };
 $('#sheet-bingo-what').onchange = bingoWords;
@@ -386,4 +425,5 @@ $('#sheet-memory').onclick = () => { openSheet('memory'); paintSheetPhotos(); };
 $('#sheet-missing').onclick = () => openSheet('missing');
 $('#sheet-scramble').onclick = () => openSheet('scramble');
 $('#sheet-sudoku').onclick = () => openSheet('sudoku');
+$('#sheet-trace-words').onclick = () => openSheet('trace-words');
 $('#sheet-feelings-cards').onclick = () => openSheet('feelings-cards');

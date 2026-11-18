@@ -15,6 +15,7 @@
     'sheet-bingo words': () => { set('#sheet-bingo-what', 'words'); set('#sheet-bingo-size', '3'); set('#sheet-bingo-count', '6'); $('#sheet-words').value = 'cat\ndog\nsun\nhat\npig\nbus\nred\nbig\nrun\njump\nplay\nbutterfly'; },
 'sheet-bingo photos': async () => { sheetPhotos = await snaps(12); set('#sheet-bingo-what', 'photos'); set('#sheet-bingo-size', '3'); set('#sheet-bingo-count', '6'); },
     'sheet-memory photos': async () => { sheetPhotos = await snaps(12); set('#sheet-memory-what', 'photo-names'); set('#sheet-memory-pairs', '6'); },
+    'sheet-trace-words': () => { $('#sheet-words').value = 'cat\nred hen\nI can see the sun'; },
         'sheet-seating': () => { set('#sheet-seat-layout', 'groups4'); set('#sheet-seat-order', 'mixed'); $('#sheet-words').value = Array.from({ length: 22 }, (_, i) => ['Ava', 'Ben', 'Charlotte', 'Dev', 'Smith, Ella'][i % 5] + (i > 4 ? ' ' + i : '')).join('\n'); },
     'sheet-clock': () => { set('#sheet-clock-level', 'quarter'); set('#sheet-clock-mode', 'read'); },
     'sheet-memory': () => { set('#sheet-memory-what', 'words'); set('#sheet-memory-pairs', '9'); },
