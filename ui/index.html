@@ -111,7 +111,7 @@
       <label data-kinds="dots">Dots <select id="sheet-dots-upto"><option>10</option><option selected>15</option><option>20</option></select></label>
       <label data-kinds="sort">Sort into <select id="sheet-sort"><option value="animals-food">Animals and food</option><option value="land-water">Lives on land or in water</option><option value="hot-cold">Hot and cold</option><option value="go-fly">On the road or in the sky</option></select></label>
       <label data-kinds="number-cards">Numbers <select id="sheet-card-numbers"><option value="0-10">0 to 10</option><option value="1-10">1 to 10</option><option value="1-20" selected>1 to 20</option><option value="0-20">0 to 20</option></select></label>
-      <label data-kinds="abc-cards number-cards colour-cards shape-cards">Cards <select id="sheet-card-layout"><option value="four">Four to a page (cut them apart)</option><option value="one">One big card a page</option></select></label>
+      <label data-kinds="abc-cards number-cards colour-cards shape-cards feelings-cards">Cards <select id="sheet-card-layout"><option value="four">Four to a page (cut them apart)</option><option value="one">One big card a page</option></select></label>
       <label data-kinds="checklist">Check <select id="sheet-check-kind"><option value="letters">Letters: capitals and small</option><option value="sounds">Letter sounds</option><option value="numbers">Numbers, shapes and colours</option></select></label>
       <label data-kinds="maze">How big <select id="sheet-maze-size"><option value="easy">Easy: 5 × 5</option><option value="medium" selected>Medium: 8 × 8</option><option value="hard">Hard: 12 × 12</option></select></label>
       <label data-kinds="maze">Who's going where <select id="sheet-maze-pair"><option value="rabbit">Bunny to the carrot</option><option value="bee">Bee to the flower</option><option value="mouse">Mouse to the cheese</option><option value="dog">Dog to the bone</option><option value="monkey">Monkey to the banana</option><option value="chick">Chick to the corn</option></select></label>
@@ -125,6 +125,8 @@
       <label data-kinds="missing">Count up to <select id="sheet-missing-upto"><option>10</option><option selected>20</option><option>30</option><option>50</option><option>100</option></select></label>
       <label data-kinds="missing">Leave out <select id="sheet-missing-share"><option value="few">A few numbers</option><option value="half" selected>About half</option><option value="most">Most of them</option></select></label>
       <label data-kinds="scramble" class="check"><input id="sheet-scramble-bank" type="checkbox" checked> Word bank at the bottom</label>
+      <label data-kinds="sudoku">Sudoku with <select id="sheet-sudoku-what"><option value="pictures">Pictures</option><option value="numbers">Numbers 1 to 4</option></select></label>
+      <label data-kinds="sudoku">How hard <select id="sheet-sudoku-level"><option value="easy">Easy: 5 to find</option><option value="medium" selected>Medium: 7 to find</option><option value="hard">Hard: 9 to find</option></select></label>
       <label data-kinds="bingo">Bingo with <select id="sheet-bingo-what"><option value="pictures">Pictures</option><option value="capitals">Capital letters</option><option value="small">Small letters</option><option value="n20">Numbers 1 to 20</option><option value="n50">Numbers 1 to 50</option><option value="words">My own words</option></select></label>
       <label data-kinds="bingo">Squares <select id="sheet-bingo-size"><option value="3">3 × 3 (for little ones)</option><option value="4">4 × 4</option><option value="5">5 × 5 with a free square</option></select></label>
       <label data-kinds="bingo">Cards <select id="sheet-bingo-count"><option>6</option><option>10</option><option>15</option><option selected>20</option><option>25</option><option>30</option></select></label>
@@ -334,6 +336,7 @@
             <button id="sheet-pattern-pics" type="button">🧩 What comes next?</button>
             <button id="sheet-dots" type="button">⭐ Dot-to-dot</button>
             <button id="sheet-maze" type="button">🐰 Maze</button>
+            <button id="sheet-sudoku" type="button">🧠 Picture sudoku</button>
           </div>
           <h4 class="sheet-group">Games</h4>
           <div class="sheet-buttons">
@@ -355,6 +358,7 @@
             <button id="sheet-colour-cards" type="button">🎨 Colours</button>
             <button id="sheet-shape-cards" type="button">🔷 Shapes</button>
             <button id="sheet-calendar-cards" type="button">📅 Calendar and weather</button>
+            <button id="sheet-feelings-cards" type="button">😊 Feelings</button>
           </div>
           <p class="hint" id="sheet-done" role="status"></p>
         </section>

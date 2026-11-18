@@ -15,7 +15,9 @@
     'sheet-clock': () => { set('#sheet-clock-level', 'quarter'); set('#sheet-clock-mode', 'read'); },
     'sheet-memory': () => { set('#sheet-memory-what', 'words'); set('#sheet-memory-pairs', '9'); },
     'sheet-missing': () => { set('#sheet-missing-upto', '50'); set('#sheet-missing-share', 'half'); },
-    'sheet-scramble': () => { $('#sheet-words').value = 'cat\ndog\nfrog\nrabbit\nelephant\nbutterfly\nsun\nmoon'; }
+    'sheet-scramble': () => { $('#sheet-words').value = 'cat\ndog\nfrog\nrabbit\nelephant\nbutterfly\nsun\nmoon'; },
+    'sheet-sudoku': () => { set('#sheet-sudoku-what', 'pictures'); set('#sheet-sudoku-level', 'hard'); },
+    'sheet-feelings-cards': () => { set('#sheet-card-layout', 'four'); }
   };
   try {
     await newDesign(); await wait(1500); if (!$('#create-whatsnew').hidden) $('#create-whatsnew button').click(); // the makers live in Create's Classroom drawer, so a design is open first

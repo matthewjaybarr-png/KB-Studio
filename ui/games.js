@@ -1,5 +1,5 @@
 // Classroom games and plans, in Classroom's Puzzles and worksheets: bingo cards (a different one for each child, with
-// calling cards to cut apart), memory game cards, a seating plan from a class list, telling the time, missing numbers and a word scramble. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
+// calling cards to cut apart), memory game cards, a seating plan from a class list, telling the time, missing numbers, a word scramble, picture sudoku and feelings wall cards. They are Puzzles and worksheets kinds, made of ordinary text, shapes and the app's clip art.
 // Needs create.js, worksheets.js, preschool.js and posters.js.
 
 const plainLabel = name => picLabel(name).replace(/ \(.*\)$/, '');
@@ -214,6 +214,65 @@ function scramblePage(title, words, mixed, bank, answers) {
   return toPage(parts);
 }
 
+// ---- Picture sudoku: a 4 × 4 grid where each row, column and box of four has each picture once ----
+const SUDOKU_BASE = [0, 1, 2, 3, 2, 3, 0, 1, 1, 0, 3, 2, 3, 2, 1, 0], SUDOKU_GAPS = { easy: 5, medium: 7, hard: 9 };
+// How many ways a grid (-1 for an empty square) can be finished, counting no further than `limit`.
+function sudokuSolutions(g, limit = 2) {
+  const i = g.indexOf(-1);
+  if (i < 0) return 1;
+  const r = i >> 2, c = i & 3;
+  let n = 0;
+  for (let v = 0; v < 4 && n < limit; v++) {
+    let ok = true;
+    for (let k = 0; k < 4 && ok; k++) ok = g[r * 4 + k] !== v && g[k * 4 + c] !== v && g[((r >> 1) * 2 + (k >> 1)) * 4 + (c >> 1) * 2 + (k & 1)] !== v;
+    if (ok) { g[i] = v; n += sudokuSolutions(g, limit - n); g[i] = -1; }
+  }
+  return n;
+}
+// A finished grid (the base one with its rows, columns and pictures mixed) and the puzzle: squares taken out one at
+// a time, only while there is still just one way to finish it.
+function sudoku(gaps, rand) {
+  const sym = shuffled([0, 1, 2, 3], rand), order = () => { const a = shuffled([0, 1], rand), b = shuffled([2, 3], rand); return rand() < 0.5 ? [...a, ...b] : [...b, ...a]; }, rows = order(), cols = order();
+  const solution = Array.from({ length: 16 }, (_, i) => sym[SUDOKU_BASE[rows[i >> 2] * 4 + cols[i & 3]]]), puzzle = solution.slice();
+  let out = 0;
+  for (const i of shuffled([...puzzle.keys()], rand)) {
+    if (out >= gaps) break;
+    puzzle[i] = -1;
+    if (sudokuSolutions(puzzle.slice()) === 1) out++; else puzzle[i] = solution[i];
+  }
+  return { solution, puzzle };
+}
+async function sudokuPage(title, s, items, answers) {
+  const cell = 124, left = (816 - cell * 4) / 2, top = 214, mid = left + cell * 2, parts = [...preHeader(answers ? keyTitle(title) : title),
+    T('Every row, every column and every box of four needs each one once. Cut out the squares at the bottom and stick them in.', 48, 148, { width: 720, fontSize: 18, textAlign: 'center', fill: '#666666', kbName: 'Instructions' })];
+  for (const [i, v] of s.solution.entries()) {
+    const x = left + (i & 3) * cell, y = top + (i >> 2) * cell, gap = s.puzzle[i] < 0;
+    parts.push(R(x, y, cell, cell, { fill: '#ffffff', stroke: '#9a86d6', strokeWidth: 1.5, kbName: gap ? 'Empty square' : 'Square' }));
+    if (!gap || answers) parts.push(...await squareItem(items[v], x + 10, y + 10, cell - 20, false));
+    if (gap && answers) parts.push(R(x + 6, y + 6, cell - 12, cell - 12, { rx: 8, ry: 8, stroke: SHEET_PINK, strokeWidth: 4, kbName: 'Answer' }));
+  }
+  parts.push(R(left, top, cell * 4, cell * 4, { stroke: '#3a3a3a', strokeWidth: 5, kbName: 'Grid edge' }),
+    new kbe.Path(`M${mid} ${top} L${mid} ${top + cell * 4} M${left} ${top + cell * 2} L${left + cell * 4} ${top + cell * 2}`, { fill: '', stroke: '#3a3a3a', strokeWidth: 5, kbName: 'Box lines' }));
+  if (!answers) {
+    const pieces = s.solution.filter((_, i) => s.puzzle[i] < 0).sort(), per = 7, size = 92;
+    for (const [j, v] of pieces.entries()) {
+      const row = Math.floor(j / per), inRow = Math.min(per, pieces.length - row * per), x = 408 + (j % per - inRow / 2) * size, y = 760 + row * (size + 12);
+      parts.push(R(x, y, size, size, { stroke: '#999999', strokeWidth: 1.5, strokeDashArray: [8, 6], kbName: 'Line to cut' }), ...await squareItem(items[v], x + 8, y + 8, size - 16, false));
+    }
+  }
+  return toPage(parts);
+}
+
+// ---- Feelings: wall cards with a face and its word, for circle time ----
+const FEELINGS = [['Happy', 'grinning face'], ['Sad', 'crying face'], ['Angry', 'angry face'], ['Scared', 'fearful face'], ['Surprised', 'astonished face'], ['Tired', 'yawning face'],
+  ['Excited', 'star-struck'], ['Shy', 'flushed face'], ['Silly', 'zany face'], ['Calm', 'relieved face'], ['Worried', 'worried face'], ['Sick', 'face with thermometer'],
+  ['Loved', 'smiling face with hearts'], ['Proud', 'beaming face with smiling eyes'], ['Confused', 'confused face'], ['Sleepy', 'sleeping face']];
+async function feelingCard([word, face], x, y, w, h, i) {
+  return [cardWords('I feel', x, y + h * 0.06, w, h * 0.06, { fontWeight: 'normal', fill: '#666666', kbName: 'I feel' }),
+    await pic(face, x + w / 2, y + h * 0.46, Math.min(w * 0.68, h * 0.52), { kbName: word + ' face' }),
+    cardWords(word, x, y + h * 0.78, w, h * 0.11, { fill: CARD_COLOURS[i % CARD_COLOURS.length][1] })];
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
@@ -253,7 +312,15 @@ Object.assign(SHEET_KINDS, {
       if (!words.length) return { error: 'Type a few words first, one per line.' };
       const mixed = words.map(w => scrambled(w, rand)), bank = $('#sheet-scramble-bank').checked ? shuffled(words, rand) : null;
       return { pages: [scramblePage(title, words, mixed, bank, false), ...(key ? [scramblePage(title, words, mixed, bank, true)] : [])] };
-    } }
+    } },
+  sudoku: { title: 'Picture sudoku', words: false,
+    async make(title, key, seed) {
+      const rand = seededRandom(seed), s = sudoku(SUDOKU_GAPS[$('#sheet-sudoku-level').value], rand);
+      const items = $('#sheet-sudoku-what').value === 'numbers' ? ['1', '2', '3', '4'].map(text => ({ text })) : shuffled(BINGO_PICS, rand).slice(0, 4).map(p => ({ pic: p }));
+      return { pages: [await sudokuPage(title, s, items, false), ...(key ? [await sudokuPage(title, s, items, true)] : [])] };
+    } },
+  'feelings-cards': { title: 'Feelings', words: false, key: false,
+    async make() { return { pages: await cardPages(FEELINGS, cardLayout(), feelingCard), note: `${FEELINGS.length} feelings, from Happy to Sleepy.` }; } }
 });
 const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; };
 $('#sheet-bingo-what').onchange = bingoWords;
@@ -263,3 +330,5 @@ $('#sheet-clock').onclick = () => openSheet('clock');
 $('#sheet-memory').onclick = () => openSheet('memory');
 $('#sheet-missing').onclick = () => openSheet('missing');
 $('#sheet-scramble').onclick = () => openSheet('scramble');
+$('#sheet-sudoku').onclick = () => openSheet('sudoku');
+$('#sheet-feelings-cards').onclick = () => openSheet('feelings-cards');
