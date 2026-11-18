@@ -41,6 +41,9 @@
         $('#create-undo').click(); await wait(800); const undone = board.getObjects()[0].left;
         $('#create-redo').click(); await wait(800); const redone = board.getObjects()[0].left;
         rec.undo = [left, undone, redone];
+        // A seating plan's desk takes a new name from the toolbar's Change name.
+        const desk = board.getObjects().find(o => o.kbDesk);
+        if (desk) { board.setActiveObject(desk); paintPanel(); await wait(300); $('#desk-rename').click(); await wait(400); $('#name-input').value = 'Josephine'; $('#name-dialog button[value=ok]').click(); await wait(800); rec.desk = [desk.kbName, getComputedStyle($('#desk-rename')).display, $('#create-saved').textContent]; }
       } catch (e) { rec.threw = String(e && e.stack || e).slice(0, 400); }
       log.push(rec);
     }

@@ -5,13 +5,16 @@
 const plainLabel = name => picLabel(name).replace(/ \(.*\)$/, '');
 // Words as big as fit a box, centred in it: no word wider than the box (a text box grows to fit its longest word),
 // none broken over two lines, and the lines no taller than the box.
-function fitText(text, x, y, w, h, o = {}) {
-  const words = text.split(/\s+/).length;
-  let size = o.fontSize || h * 0.56;
-  const t = T(text, x, y, { width: w, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: '#3a3a3a', kbName: 'Square words', ...o, fontSize: size });
+function fitInto(t, x, y, w, h, size) {
+  const words = t.text.split(/\s+/).length;
+  t.set({ fontSize: size, width: w }); t.initDimensions();
   while ((t.width > w || t.textLines.length > words || t.height > h) && size > 8) { size *= 0.92; t.set({ fontSize: size, width: w }); t.initDimensions(); }
   t.set({ left: x + (w - t.width) / 2, top: y + (h - t.height) / 2 });
   return t;
+}
+function fitText(text, x, y, w, h, o = {}) {
+  const size = o.fontSize || h * 0.56;
+  return fitInto(T(text, x, y, { width: w, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: '#3a3a3a', kbName: 'Square words', ...o, fontSize: size }), x, y, w, h, size);
 }
 // One thing in a square `s` wide at (x, y): a picture (with its word under it if `label`), or words as big as fit
 // (`item.size` caps them, as a share of the square).
@@ -96,13 +99,28 @@ function seatSpots(n, layout) {
   }
   return spots;
 }
-// Each desk is its box and name grouped, so it drags as one thing.
+// Each desk is its box and name grouped, so it drags as one thing; Change name in the toolbar retypes who sits there.
+KEEP.push('kbDesk');
+const deskSize = h => Math.min(24, h * 0.42);
+function renameDesk(desk, name) {
+  const box = desk.getObjects().find(o => o.type === 'rect'), t = desk.getObjects().find(o => o.type === 'textbox');
+  t.set('text', name);
+  fitInto(t, box.left + 5, box.top + 3, box.width - 10, box.height - 6, deskSize(box.height));
+  desk.set({ kbName: 'Desk: ' + name, dirty: true });
+}
+$('#desk-rename').onclick = async () => {
+  const desk = board.getActiveObject();
+  if (!desk?.kbDesk) return;
+  const name = await askName('Who sits here?', desk.kbName.replace(/^Desk: /, ''));
+  if (!name) return;
+  renameDesk(desk, name); board.requestRenderAll(); commitDesign();
+};
 function seatingPage(title, names, layout) {
   const parts = [T(title, 48, 36, { width: 720, fontSize: 44, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', kbName: 'Title' }),
     new kbe.Group([R(208, 112, 400, 44, { rx: 10, ry: 10, fill: '#3a3a3a', stroke: '#3a3a3a', kbName: 'Board' }), fitText('Front of the room', 218, 112, 380, 44, { fontSize: 22, fill: '#ffffff', fontWeight: 'normal' })], { kbName: 'Front of the room' })];
   for (const [i, [x, y, w, h, group]] of seatSpots(names.length, layout).entries()) {
     const [fill, edge] = CARD_COLOURS[group % CARD_COLOURS.length];
-    parts.push(new kbe.Group([R(48 + x, 200 + y, w, h, { rx: 8, ry: 8, fill, stroke: edge, strokeWidth: 2.5, kbName: 'Desk' }), fitText(names[i], 48 + x + 5, 200 + y + 3, w - 10, h - 6, { fontSize: Math.min(24, h * 0.42), kbName: 'Name' })], { kbName: 'Desk: ' + names[i] }));
+    parts.push(new kbe.Group([R(48 + x, 200 + y, w, h, { rx: 8, ry: 8, fill, stroke: edge, strokeWidth: 2.5, kbName: 'Desk' }), fitText(names[i], 48 + x + 5, 200 + y + 3, w - 10, h - 6, { fontSize: deskSize(h), kbName: 'Name' })], { kbName: 'Desk: ' + names[i], kbDesk: true }));
   }
   return toPage(parts);
 }
@@ -278,6 +296,8 @@ Object.assign(SHEET_KINDS, {
     async make(title, key, seed, words) {
       const what = $('#sheet-bingo-what').value, size = +$('#sheet-bingo-size').value, pool = bingoPool(what, words), need = bingoNeeds(size);
       const cards = bingoCards(pool, size, +$('#sheet-bingo-count').value, seededRandom(seed));
+      // Her words the same size on the cards: the size that fits four in five of them, so one long word shrinks alone.
+      if (what === 'words' && pool.length) { const s = 672 / size - 8, sizes = pool.map(item => fitText(item.text, 0, 0, s - 8, s).fontSize).sort((a, b) => a - b), share = sizes[Math.floor(sizes.length * 0.2)] / s; for (const item of pool) item.size = share; }
       if (!cards) return { error: what === 'words' ? `A ${size} × ${size} card needs at least ${need} different words, and there ${pool.length === 1 ? 'is' : 'are'} ${pool.length}. Add more words or pick fewer squares.` : `A ${size} × ${size} card needs ${need} different squares, and there are only ${pool.length} of these. Pick fewer squares.` };
       const pages = [];
       for (const [n, cells] of cards.entries()) pages.push(await bingoPage(title, cells, size, n));
@@ -289,7 +309,7 @@ Object.assign(SHEET_KINDS, {
       let names = seatNames(words, $('#sheet-seat-first').checked);
       if (names.length < 2) return { error: 'Type their names first, one per line, or pick your class list.' };
       if ($('#sheet-seat-order').value === 'mixed') names = shuffled(names, seededRandom(seed));
-      return { pages: [seatingPage(title, names, $('#sheet-seat-layout').value)], note: `${names.length} desks. Drag a desk to move it; Ungroup it to change the name.` };
+      return { pages: [seatingPage(title, names, $('#sheet-seat-layout').value)], note: `${names.length} desks. Drag a desk to move it; click one, then Change name, to change who sits there.` };
     } },
   clock: { title: 'Telling the time', words: false,
     async make(title, key, seed) {

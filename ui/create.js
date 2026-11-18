@@ -1118,7 +1118,7 @@ function tagsOf(o) {
   if (objects.some(x => x.kbLocked)) return ['locked'];
   if (o.type === 'activeselection') return ['object', 'multi'];
   const kind = { textbox: 'text', image: 'image', group: 'group', line: 'line' }[o.type] || (o.type === 'path' && !o.fill ? 'line' : 'shape');
-  return ['object', kind, ...(o.type === 'rect' ? ['rect'] : []), ...(o.kbChart ? ['chart'] : []), ...(o.kbTable ? ['cell'] : [])];
+  return ['object', kind, ...(o.type === 'rect' ? ['rect'] : []), ...(o.kbChart ? ['chart'] : []), ...(o.kbDesk ? ['desk'] : []), ...(o.kbTable ? ['cell'] : [])];
 }
 // The toolbar along the top shows only what fits the selection, like Canva's.
 function paintPanel() {
