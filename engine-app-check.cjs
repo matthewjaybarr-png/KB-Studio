@@ -149,7 +149,7 @@ window.H = {
     const same = (a, b, p = '', out = []) => {
       if (typeof a === 'number' && typeof b === 'number') { if (Math.abs(a - b) > 0.001) out.push(p + ': ' + a + ' vs ' + b); }
       else if (a && b && typeof a === 'object' && typeof b === 'object') { for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) same(a[k], b[k], p + '.' + k, out); }
-      else if (a !== b && !/\.kbTable$/.test(p)) out.push(p + ': ' + J(a) + ' vs ' + J(b)); return out; // kbTable is a fresh random id each time
+      else if (a !== b && !/\.kbTable$/.test(p) && !(a === undefined && /\.kbDesk$/.test(p))) out.push(p + ': ' + J(a) + ' vs ' + J(b)); return out; // kbTable is a fresh random id each time; kbDesk (Change name on a desk) is a mark main doesn't make yet
     };
     const compare = async (label, oldRes, newRes) => {
       total++; const d = await newPage.evalIn(`H.diff(${J(oldRes.png)}, ${J(newRes.png)})`), jd = same(oldRes.json, newRes.json), sheet = d.sheet; delete d.sheet;
