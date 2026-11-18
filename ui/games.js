@@ -5,27 +5,62 @@
 const plainLabel = name => picLabel(name).replace(/ \(.*\)$/, '');
 // Words as big as fit a box, centred in it: no word wider than the box (a text box grows to fit its longest word),
 // none broken over two lines, and the lines no taller than the box.
-function fitText(text, x, y, w, h, o = {}) {
-  const words = text.split(/\s+/).length;
-  let size = o.fontSize || h * 0.56;
-  const t = T(text, x, y, { width: w, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: '#3a3a3a', kbName: 'Square words', ...o, fontSize: size });
+function fitInto(t, x, y, w, h, size) {
+  const words = t.text.split(/\s+/).length;
+  t.set({ fontSize: size, width: w }); t.initDimensions();
   while ((t.width > w || t.textLines.length > words || t.height > h) && size > 8) { size *= 0.92; t.set({ fontSize: size, width: w }); t.initDimensions(); }
   t.set({ left: x + (w - t.width) / 2, top: y + (h - t.height) / 2 });
   return t;
 }
-// One thing in a square `s` wide at (x, y): a picture (with its word under it if `label`), or words as big as fit
-// (`item.size` caps them, as a share of the square).
+function fitText(text, x, y, w, h, o = {}) {
+  const size = o.fontSize || h * 0.56;
+  return fitInto(T(text, x, y, { width: w, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: '#3a3a3a', kbName: 'Square words', ...o, fontSize: size }), x, y, w, h, size);
+}
+// ---- Her own photos in the games: chosen in the window, each cut square and made small once ----
+let sheetPhotos = [];
+const photoUrls = new Map();
+const photoName = file => file.name.replace(/\.[^.]*$/, '').replace(/[_-]+/g, ' ').trim().slice(0, 30) || 'photo';
+// The middle square of a photo, 360 pixels across: plenty for a card, and small enough for thirty cards of them.
+async function photoUrl(file) {
+  if (photoUrls.has(file)) return photoUrls.get(file);
+  const bitmap = await createImageBitmap(file), side = Math.min(bitmap.width, bitmap.height), out = Object.assign(document.createElement('canvas'), { width: 360, height: 360 });
+  out.getContext('2d').drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 360, 360);
+  bitmap.close?.();
+  photoUrls.set(file, out.toDataURL('image/jpeg', 0.85));
+  return photoUrls.get(file);
+}
+const photoItems = () => sheetPhotos.map(file => ({ photo: file, text: photoName(file) }));
+// A clip-art picture or one of her photos, `size` square, centred on (cx, cy).
+async function itemPic(item, cx, cy, size) {
+  if (!item.photo) return pic(item.pic, cx, cy, size);
+  const image = await kbe.FabricImage.fromURL(await photoUrl(item.photo));
+  image.set({ left: cx - size / 2, top: cy - size / 2, scaleX: size / image.width, scaleY: size / image.height, kbName: 'Photo ' + item.text });
+  return image;
+}
+function paintSheetPhotos() {
+  const strips = sheet.kind === 'strips', what = sheet.kind === 'bingo' ? $('#sheet-bingo-what').value : sheet.kind === 'memory' ? $('#sheet-memory-what').value : '';
+  $('#sheet-photos-row').hidden = !strips && !what.startsWith('photo');
+  $('#sheet-photos-hint').hidden = strips || !what.startsWith('photo'); // file names don't matter to the strip puzzle
+  $('#sheet-photos-count').textContent = sheetPhotos.length ? `${sheetPhotos.length} photo${sheetPhotos.length === 1 ? '' : 's'} chosen` : 'None chosen yet';
+}
+$('#sheet-photos-add').onclick = () => $('#sheet-photos-file').click();
+$('#sheet-photos-file').onchange = e => { sheetPhotos = [...e.target.files].filter(f => f.type.startsWith('image/') || pictureType(f.name)).slice(0, 60); e.target.value = ''; paintSheetPhotos(); };
+
+// One thing in a square `s` wide at (x, y): a picture or photo (with its word under it if `label`), or words as big
+// as fit (`item.size` caps them, as a share of the square).
 async function squareItem(item, x, y, s, label) {
-  if (item.pic && !label) return [await pic(item.pic, x + s / 2, y + s / 2, s * 0.76)];
-  if (!item.pic) return [fitText(item.text, x + 4, y, s - 8, s, item.size ? { fontSize: s * item.size } : {})];
-  return [await pic(item.pic, x + s / 2, y + s * 0.4, s * 0.58), fitText(item.text, x + 4, y + s * 0.72, s - 8, s * 0.26, { fontSize: s * 0.15 })];
+  const art = item.pic || item.photo;
+  if (art && !label) return [await itemPic(item, x + s / 2, y + s / 2, s * (item.photo ? 0.9 : 0.76))];
+  if (!art) return [fitText(item.text, x + 4, y, s - 8, s, item.size ? { fontSize: s * item.size } : {})];
+  return [await itemPic(item, x + s / 2, y + s * 0.4, s * (item.photo ? 0.66 : 0.58)), fitText(item.text, x + 4, y + s * 0.74, s - 8, s * 0.24, { fontSize: s * 0.15 })];
 }
 
 // ---- Bingo ----
 const BINGO_PICS = [...new Set(MATCH_PICS.concat(COUNT_PICS, PATTERN_PICS))];
-// What can be called: pictures, letters, numbers, or her own words (one a line, no repeats, 60 at most).
+// What can be called: pictures, her photos, letters, numbers, or her own words (one a line, no repeats, 60 at most).
 function bingoPool(what, words = '') {
   if (what === 'pictures') return BINGO_PICS.map(p => ({ pic: p, text: plainLabel(p) }));
+  if (what === 'photos') return photoItems();
   if (what === 'capitals' || what === 'small') return Object.keys(LETTER_PICS).map(l => ({ text: what === 'small' ? l.toLowerCase() : l }));
   if (what === 'n20' || what === 'n50') return Array.from({ length: what === 'n20' ? 20 : 50 }, (_, i) => ({ text: String(i + 1) }));
   const seen = new Set();
@@ -96,13 +131,28 @@ function seatSpots(n, layout) {
   }
   return spots;
 }
-// Each desk is its box and name grouped, so it drags as one thing.
+// Each desk is its box and name grouped, so it drags as one thing; Change name in the toolbar retypes who sits there.
+KEEP.push('kbDesk');
+const deskSize = h => Math.min(24, h * 0.42);
+function renameDesk(desk, name) {
+  const box = desk.getObjects().find(o => o.type === 'rect'), t = desk.getObjects().find(o => o.type === 'textbox');
+  t.set('text', name);
+  fitInto(t, box.left + 5, box.top + 3, box.width - 10, box.height - 6, deskSize(box.height));
+  desk.set({ kbName: 'Desk: ' + name, dirty: true });
+}
+$('#desk-rename').onclick = async () => {
+  const desk = board.getActiveObject();
+  if (!desk?.kbDesk) return;
+  const name = await askName('Who sits here?', desk.kbName.replace(/^Desk: /, ''));
+  if (!name) return;
+  renameDesk(desk, name); board.requestRenderAll(); commitDesign();
+};
 function seatingPage(title, names, layout) {
   const parts = [T(title, 48, 36, { width: 720, fontSize: 44, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', kbName: 'Title' }),
     new kbe.Group([R(208, 112, 400, 44, { rx: 10, ry: 10, fill: '#3a3a3a', stroke: '#3a3a3a', kbName: 'Board' }), fitText('Front of the room', 218, 112, 380, 44, { fontSize: 22, fill: '#ffffff', fontWeight: 'normal' })], { kbName: 'Front of the room' })];
   for (const [i, [x, y, w, h, group]] of seatSpots(names.length, layout).entries()) {
     const [fill, edge] = CARD_COLOURS[group % CARD_COLOURS.length];
-    parts.push(new kbe.Group([R(48 + x, 200 + y, w, h, { rx: 8, ry: 8, fill, stroke: edge, strokeWidth: 2.5, kbName: 'Desk' }), fitText(names[i], 48 + x + 5, 200 + y + 3, w - 10, h - 6, { fontSize: Math.min(24, h * 0.42), kbName: 'Name' })], { kbName: 'Desk: ' + names[i] }));
+    parts.push(new kbe.Group([R(48 + x, 200 + y, w, h, { rx: 8, ry: 8, fill, stroke: edge, strokeWidth: 2.5, kbName: 'Desk' }), fitText(names[i], 48 + x + 5, 200 + y + 3, w - 10, h - 6, { fontSize: deskSize(h), kbName: 'Name' })], { kbName: 'Desk: ' + names[i], kbDesk: true }));
   }
   return toPage(parts);
 }
@@ -147,6 +197,7 @@ function clockPage(title, times, mode, answers) {
 // `pairs` pairs of card faces: the same picture twice, a big and a small letter, a number and that many dots, or a
 // picture and its word.
 function memoryPairs(what, pairs, rand) {
+  if (what.startsWith('photo')) return shuffled(photoItems(), rand).slice(0, pairs).map(item => [item, what === 'photo-names' ? { text: item.text, size: 0.24 } : item]);
   if (what === 'numbers') return Array.from({ length: pairs }, (_, i) => [{ text: String(i + 1) }, { dots: i + 1 }]);
   if (what === 'letters') return shuffled(Object.keys(LETTER_PICS), rand).slice(0, pairs).sort().map(l => [{ text: l }, { text: l.toLowerCase() }]);
   return shuffled(BINGO_PICS, rand).slice(0, pairs).map(p => [{ pic: p }, what === 'words' ? { text: plainLabel(p), size: 0.24 } : { pic: p }]);
@@ -273,11 +324,54 @@ async function feelingCard([word, face], x, y, w, h, i) {
     cardWords(word, x, y + h * 0.78, w, h * 0.11, { fill: CARD_COLOURS[i % CARD_COLOURS.length][1] })];
 }
 
+// ---- Trace the words: her own words or short sentences in dotted ball-and-stick letters, a row each ----
+// Six rows a page: a word a row, or (with `copy`) a word and an empty row under it to write it again.
+function traceWordsPages(title, lines, copy) {
+  const per = copy ? 3 : 6, pitch = 820 / 6, pages = [];
+  for (let first = 0; first < lines.length; first += per) {
+    const parts = [...preHeader(title)];
+    for (const [i, text] of lines.slice(first, first + per).entries()) {
+      const k = nameK(text), row = copy ? i * 2 : i;
+      for (const r of copy ? [row, row + 1] : [row]) {
+        const top = 175 + r * pitch + 8 * k;
+        parts.push(...writingLines(60, top, 696, k));
+        if (r === row) parts.push(traceText(text, 68, top, k, true));
+      }
+    }
+    pages.push(toPage(parts.filter(Boolean)));
+  }
+  return pages;
+}
+
+// ---- Number strip puzzle: one of her photos cut into strips with a number under each, to put back in counting order ----
+const stripNumbers = (count, by) => Array.from({ length: count }, (_, i) => (i + 1) * by);
+// The photo as big as the page takes, cut to a shape between tall (4:5) and wide (8:5) so a strip is never a sliver.
+async function stripPhoto(file) {
+  const bitmap = await createImageBitmap(file), shape = Math.min(1.6, Math.max(0.8, bitmap.width / bitmap.height));
+  const w = Math.round(Math.min(696, 640 * shape)), h = Math.round(w / shape), out = Object.assign(document.createElement('canvas'), { width: w * 2, height: h * 2 });
+  const cut = Math.min(bitmap.width, bitmap.height * shape);
+  out.getContext('2d').drawImage(bitmap, (bitmap.width - cut) / 2, (bitmap.height - cut / shape) / 2, cut, cut / shape, 0, 0, w * 2, h * 2);
+  bitmap.close?.();
+  return { url: out.toDataURL('image/jpeg', 0.88), w, h };
+}
+async function stripPage(title, file, numbers) {
+  const { url, w, h } = await stripPhoto(file), left = (816 - w) / 2, top = 205, cell = w / numbers.length, box = 84;
+  const image = await kbe.FabricImage.fromURL(url);
+  image.set({ left, top, scaleX: w / image.width, scaleY: h / image.height, kbName: 'Photo to cut' });
+  const parts = [...preHeader(title), T('Cut along the dotted lines. Put the strips in counting order to make the picture.', 60, 158, { width: 696, textAlign: 'center', fontSize: 18, fill: '#555555', kbName: 'What to do' }), image];
+  numbers.forEach((n, i) => parts.push(R(left + i * cell, top, cell, h + box, { stroke: '#999999', strokeWidth: 1.5, strokeDashArray: [8, 6], kbName: 'Line to cut' }),
+    fitText(String(n), left + i * cell + 4, top + h + 6, cell - 8, box - 12, { fontSize: 46, kbName: 'Strip number' })));
+  return toPage(parts.filter(Boolean));
+}
+
 Object.assign(SHEET_KINDS, {
   bingo: { title: 'Bingo', words: false, key: false, hint: 'One word per line, up to 60. Pick one of your lists above to fill it in.',
     async make(title, key, seed, words) {
       const what = $('#sheet-bingo-what').value, size = +$('#sheet-bingo-size').value, pool = bingoPool(what, words), need = bingoNeeds(size);
       const cards = bingoCards(pool, size, +$('#sheet-bingo-count').value, seededRandom(seed));
+      // Her words the same size on the cards: the size that fits four in five of them, so one long word shrinks alone.
+      if (what === 'words' && pool.length) { const s = 672 / size - 8, sizes = pool.map(item => fitText(item.text, 0, 0, s - 8, s).fontSize).sort((a, b) => a - b), share = sizes[Math.floor(sizes.length * 0.2)] / s; for (const item of pool) item.size = share; }
+      if (!cards && what === 'photos') return { error: `A ${size} × ${size} card needs at least ${need} photos, and ${pool.length === 1 ? 'there is 1' : 'there are ' + pool.length} chosen. Choose more photos or pick fewer squares.` };
       if (!cards) return { error: what === 'words' ? `A ${size} × ${size} card needs at least ${need} different words, and there ${pool.length === 1 ? 'is' : 'are'} ${pool.length}. Add more words or pick fewer squares.` : `A ${size} × ${size} card needs ${need} different squares, and there are only ${pool.length} of these. Pick fewer squares.` };
       const pages = [];
       for (const [n, cells] of cards.entries()) pages.push(await bingoPage(title, cells, size, n));
@@ -289,7 +383,7 @@ Object.assign(SHEET_KINDS, {
       let names = seatNames(words, $('#sheet-seat-first').checked);
       if (names.length < 2) return { error: 'Type their names first, one per line, or pick your class list.' };
       if ($('#sheet-seat-order').value === 'mixed') names = shuffled(names, seededRandom(seed));
-      return { pages: [seatingPage(title, names, $('#sheet-seat-layout').value)], note: `${names.length} desks. Drag a desk to move it; Ungroup it to change the name.` };
+      return { pages: [seatingPage(title, names, $('#sheet-seat-layout').value)], note: `${names.length} desks. Drag a desk to move it; click one, then Change name, to change who sits there.` };
     } },
   clock: { title: 'Telling the time', words: false,
     async make(title, key, seed) {
@@ -299,6 +393,7 @@ Object.assign(SHEET_KINDS, {
   memory: { title: 'Memory game', words: false, key: false,
     async make(title, key, seed) {
       const pairs = memoryPairs($('#sheet-memory-what').value, +$('#sheet-memory-pairs').value, seededRandom(seed));
+      if (pairs.length < +$('#sheet-memory-pairs').value) return { error: `${$('#sheet-memory-pairs').value} pairs need that many photos, and ${sheetPhotos.length === 1 ? 'there is 1' : 'there are ' + sheetPhotos.length} chosen. Choose more photos or fewer pairs.` };
       return { pages: await memoryPages(title, pairs), note: `${pairs.length} pairs to cut apart. Print on card so the pictures don't show through.` };
     } },
   missing: { title: 'Missing numbers', words: false,
@@ -320,15 +415,46 @@ Object.assign(SHEET_KINDS, {
       return { pages: [await sudokuPage(title, s, items, false), ...(key ? [await sudokuPage(title, s, items, true)] : [])] };
     } },
   'feelings-cards': { title: 'Feelings', words: false, key: false,
-    async make() { return { pages: await cardPages(FEELINGS, cardLayout(), feelingCard), note: `${FEELINGS.length} feelings, from Happy to Sleepy.` }; } }
+    async make() { return { pages: await cardPages(FEELINGS, cardLayout(), feelingCard), note: `${FEELINGS.length} feelings, from Happy to Sleepy.` }; } },
+  'trace-words': { title: 'Trace the words', words: true, key: false, wordsLabel: 'Words or short sentences', hint: 'One per line. A long sentence carries on to the next row. Pick one of your lists above to fill it in.', placeholder: 'cat\ndog\nI can see the sun',
+    async make(title, key, seed, words) {
+      const typed = words.split(/\r?\n/).map(w => w.trim()).filter(Boolean), lines = [], skipped = [];
+      for (const raw of typed) {
+        const text = traceable(raw.replace(/\s+/g, ' ')).trim();
+        if (!text) { skipped.push(raw); continue; }
+        // A sentence too long for one row at a size a child can trace goes on to the next rows.
+        let row = '';
+        for (const word of text.split(' ').filter(Boolean)) {
+          if (row && nameK(row + ' ' + word) < NAME_MIN_K) { lines.push(row); row = word; } else row += (row ? ' ' : '') + word;
+        }
+        lines.push(row);
+      }
+      lines.length = Math.min(lines.length, 24);
+      if (!lines.length) return { error: skipped.length ? `These have no letters it can draw (only A to Z and numbers): ${skipped.join(', ')}.` : 'Type a few words first, one per line.' };
+      const small = lines.filter(l => nameK(l) < NAME_MIN_K), notes = [];
+      if (skipped.length) notes.push(`Left out (no letters it can draw): ${skipped.join(', ')}.`);
+      if (small.length) notes.push(`Long, so written smaller: ${small.join(', ')}.`);
+      return { pages: traceWordsPages(title, lines, $('#sheet-trace-copy').checked), note: notes.join(' ') };
+    } },
+  strips: { title: 'Number strip puzzle', words: false, key: false,
+    async make(title) {
+      if (!sheetPhotos.length) return { error: 'Choose a photo first. Each photo you choose makes its own puzzle page.' };
+      const numbers = stripNumbers(+$('#sheet-strips-count').value, +$('#sheet-strips-by').value), pages = [];
+      try { for (const file of sheetPhotos.slice(0, 12)) pages.push(await stripPage(title, file, numbers)); }
+      catch (error) { return { error: 'One of the photos could not be opened. Try a JPG or PNG.' }; }
+      return { pages, note: sheetPhotos.length > 12 ? 'Made the first 12 photos.' : '' };
+    } }
 });
-const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; };
+const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; paintSheetPhotos(); };
 $('#sheet-bingo-what').onchange = bingoWords;
 $('#sheet-bingo').onclick = () => { openSheet('bingo'); bingoWords(); };
 $('#sheet-seating').onclick = () => openSheet('seating');
 $('#sheet-clock').onclick = () => openSheet('clock');
-$('#sheet-memory').onclick = () => openSheet('memory');
+$('#sheet-memory-what').onchange = paintSheetPhotos;
+$('#sheet-memory').onclick = () => { openSheet('memory'); paintSheetPhotos(); };
 $('#sheet-missing').onclick = () => openSheet('missing');
 $('#sheet-scramble').onclick = () => openSheet('scramble');
 $('#sheet-sudoku').onclick = () => openSheet('sudoku');
+$('#sheet-trace-words').onclick = () => openSheet('trace-words');
+$('#sheet-strips').onclick = () => { openSheet('strips'); paintSheetPhotos(); };
 $('#sheet-feelings-cards').onclick = () => openSheet('feelings-cards');

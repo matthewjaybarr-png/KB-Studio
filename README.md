@@ -2,18 +2,22 @@
 
 A desktop design and photo app for Linux. The start screen offers two workspaces:
 
-- **Create**, the main part of the app: a Canva-style design editor with templates, photo tools, and tools for the classroom and preschool (class lists, name tags, worksheets, tracing pages, wall cards). It also opens designs downloaded from Canva.
-- **Photos**: cull and edit a photo shoot. Open a folder of Canon CR2 and JPEG files, mark picks, rejects and stars, adjust, retouch and crop the ones you keep, and deliver them as JPEGs.
+- **Create**, the main part of the app: a Canva-style design editor with templates, photo tools, a spelling check, and tools for the classroom and preschool (class lists, name tags, worksheets, tracing pages, bingo and memory games, seating plans, wall cards). It also opens designs downloaded from Canva.
+- **Photos**: cull and edit a photo shoot. Open a folder of Canon CR2 and JPEG files, mark picks, rejects and stars, develop, retouch and crop the ones you keep, and deliver them as JPEGs.
 
 Everything runs offline; the app makes no network calls except one update check at launch.
+
+![The start screen: Create, Photos, Edit a photo and Import from Canva](docs/screenshots/start.png)
 
 ## Create
 
 Create is a small Canva-style maker for posters, labels, charts, cards, classroom pages and preschool worksheets. Everything it uses is bundled, so it works offline.
 
+![Create with the Templates drawer open and a birthday card on the page](docs/screenshots/create.png)
+
 - The buttons down the left open drawers: **Templates** (pictures of each one, in groups: Preschool, Classroom, Photos and social, and My templates; on a blank page a template fills it, otherwise it opens as a new design), **Elements** (shapes, photo frames, graphics, tables, QR codes), **Text** (heading, subheading, body), **Uploads**, **This shoot** (the shoot open in Photos, picks first, rejects left out, developed with your edits when added), **Classroom** (see below), **Draw** (Pen, Marker, Highlighter, Glow pen and an Eraser that rubs out part of a line or whole lines, with colours to click, Thickness and Transparency; the pen is picked up while it's open), **Edit photo** (retouch, cut out, faces, filters and more, below) and **Layers** (reorder, hide, lock).
 - **Edit** in the top bar holds the common canvas actions: copy, paste, duplicate, delete, layer order, lock, group, centre on the page, save to My elements and set as background (Select all when nothing is selected).
-- **Colours ▾** offers the colours already in the design, saved colours and a default palette; with nothing selected it colours the background. Text has effects (Shadow, Lift, Hollow, Outline, Neon) under Effects, and layers drag to reorder.
+- **Colours ▾** offers the colours already in the design, saved colours and a default palette; with nothing selected it colours the background. **Pick a colour from the page** takes a colour from anywhere on the design, and **From photos** offers the main colours of the photos on the page. Text has effects (Shadow, Lift, Hollow, Outline, Neon) under Effects, and layers drag to reorder.
 - **Your designs** on the start screen can be sorted into folders: drag a design onto a folder, or use its ⋯ menu (also right-click) to open, copy, rename, move or put it in the Trash, which keeps it until emptied. Folders are kept in the app's settings; the design files stay where they are.
 - **Elements** has 28 shapes and lines, ten frame shapes (including arch, heart and star) and seven **photo grids** that fill the page with frames.
 - **Font combinations** in the Text drawer add a few lines of paired fonts at once, selected together, each still its own text box.
@@ -27,17 +31,17 @@ Create is a small Canva-style maker for posters, labels, charts, cards, classroo
 - **Label sheets**: Avery 5160, 5163, 5164, 5395, 5371 and 5388 as page sizes. Print and PDF place each label where the sheet has it, either the same label throughout or the pages one after another.
 - **My elements**: save anything from a page (including pieces of Canva designs) and use it again in any design. **Save to** puts it in My elements or at the top of Shapes, Frames, Decorations, Charts, Graphics or Text; **Move** sorts it later.
 - **Links** that work in the downloaded PDF, and **Find and replace** across every page.
+- **Check spelling** (File, or the Text drawer) reads every text box on every page in US English. Each word it doesn't know is shown on the page with close words to change it to; Skip this word leaves it, and Add to my words keeps it for every design. Names in your class lists are never questioned. See the picture below.
 - **Retouch** any picture in Create with Photos' brushes and **Remove**, which makes things disappear and fills the gap from what's around them; **Edit a photo** on the start screen opens a photo as a page its own size. Remove is in Develop too.
 - **Cut out** part of any picture in Create: **Remove the background** in one click, or choose what to keep with the Smart brush, Box, Magic wand, Lasso or Brush, then keep it, erase it or make a sticker of it, or **Blur the background** behind it. **Make the paper see-through** turns a drawing or handwriting on paper into a see-through picture (uneven light and all), and **Make a colour see-through** takes away a plain colour you click. **Split a scan into photos** (Straighten) finds each print on a scan of several and gives each its own straight picture. Nothing is lost: Erase and Bring back brushes touch it up later.
 - **Photo layers** in Create: adjust just one part of a picture, fade it into the page, or blend it with what's underneath; Layers shows each picture and what was done to it.
 - **Straighten and Reshape** in Create's Edit photo: flatten a page or poster photographed at an angle by dragging its four corners, or push, grow and shrink parts of a picture.
-- **Classroom** drawer in Create: class details (teacher, school, class, room, year) added with one click and filled into {Teacher}-style placeholders in templates, a school logo, saved lists edited as a table and sent to Bulk create, and upcoming birthdays from a Birthday column. **Puzzles and worksheets** makes a word search, crossword or math practice page from your words, with an answer key, and **Preschool** pages: name, letter and number tracing (ball-and-stick letters; names from a class list, first names only, big first letter), tracing lines and shapes, beginning sounds, find the letter, count and write, ten frames, I spy and count, count and graph, matching (pictures, letters, numbers or shadows), odd one out, big and small, what comes next, cut and paste sorting, cutting practice, dot-to-dot and mazes. Twelve **Preschool templates** (daily report, sign-in sheet, visual schedule, class helpers, weekly lesson plan, monthly attendance, allergy alert, All about me, permission slip, class rules, welcome letter, Our week newsletter) fill in the class details. **Posters and wall cards** make alphabet cards, number cards, colours, shapes and a calendar and weather set, four to a page or one big card a page. **Checklists** make a page per child (letters, letter sounds, or numbers, shapes and colours) with three check-ins, and **Put these names on the page** in My lists fills the name rows of the attendance, sign-in, allergy and class helper templates.
 - **Backups**: every design, template, saved element, class list and setting copied into one file in a folder you choose (a USB stick or a cloud folder), automatically every week (or every day, or off), keeping the newest eight; the start screen says when the last one was, and Restore never overwrites.
 - **Faces** in Create's Edit photo: the faces in a photo are found and circled, then sliders touch them up: Smooth skin (blotches go, pores stay), Brighter eyes, Whiter teeth, and Bigger eyes, Smile, Slimmer face and Smaller nose. One face or all of them; Back to the photo undoes the lot.
-- **Stretch** (content-aware resize): make a photo wider, narrower, taller or shorter while people keep their shape, or make it the page's shape and fill the page. **Effects**: Oil paint, Pop-art dots, Mosaic and Pencil sketch, and **Relight** to light a photo from any side, lift its shadows or warm it up.
+- **Stretch** (content-aware resize): make a photo wider, narrower, taller or shorter while people keep their shape, or make it the page's shape and fill the page. **Effects**: Oil paint, Pop-art dots, Mosaic, Pencil sketch and Posterize, **Fix blur** for a slightly soft photo, and **Relight** to light a photo from any side, lift its shadows or warm it up.
 - **Rulers** and **guide lines** to line things up (drag a guide out of a ruler), and **All pages**, a grid of every page to find one or drag it to a new place.
-- Text can curve (Effects → Curve), become a bulleted or numbered list, switch to capitals or get a strikethrough. **Copy style** paints one thing's look onto another, and Position takes an exact size and rotation.
-- **Filters** on a selected picture offers the looks from Photos and your Develop presets as previews, with a strength slider and Brightness, Contrast, Saturation, Warmth and Vignette. **✨ Auto fix** sets them for a dark or tinted picture in one click. The original is kept, so filters can be changed or removed later.
+- Text can curve (Effects → Curve), become a bulleted or numbered list, switch to capitals or get a strikethrough. **Add page numbers** in the Text drawer puts a number at the foot of every page that stays right as pages are added, moved or deleted. **Copy style** paints one thing's look onto another, and Position takes an exact size and rotation.
+- **Filters** on a selected picture offers the looks from Photos and your Develop presets as previews, with a strength slider and Brightness, Contrast, Saturation, Warmth and Vignette. **Duotone** turns shadows and highlights into two colours, from six pairs or your own. **✨ Auto fix** sets them for a dark or tinted picture in one click. The original is kept, so filters can be changed or removed later.
 - Click something on the page and its options appear along the top: font, size − / +, colour, bold, alignment, spacing, border, corners, crop, frame, flip, effects, transparency and Position (arrange, align, equal gaps). With nothing selected it offers the background colour. A small toolbar above the selection duplicates, locks and deletes; ⋯ or a right-click opens a menu with copy, paste, layer order, lock, group and centre on the page.
 - Drop a picture, from your files or This shoot, on a frame or another picture and it fills that spot: same place, size, angle and shape, cropped around the faces in it (from the middle when it has none), as is every photo in a Bulk create name tag, collage or photo strip. Clicking a photo or uploading one with an empty frame selected fills it too.
 - The strip under the page shows every page: click one to edit it, **+ Add page** adds a blank one after it, and Duplicate, Delete and the arrows copy, remove and reorder the page you're on. Undo covers all of it. PDF and Print hold every page (once per copy); PNG and JPEG save one picture per page, numbered, which suits an Instagram carousel.
@@ -52,14 +56,41 @@ Create is a small Canva-style maker for posters, labels, charts, cards, classroo
 - If a bundled font fails to load, designs remain editable and retain their font choices, but fallback fonts may change layout. Export and Print are blocked. Save and restart KB Studio; reinstall if the warning persists.
 - In Photos, **Use in a design** sends the developed photo (or the selected ones, or the picks) to a new design: a page each, a collage, or photo-booth strips on a 4 × 6.
 
+### Check spelling
+
+![Check spelling showing a word it doesn't know, with close words to change it to](docs/screenshots/spelling.png)
+
+### Classroom and preschool
+
+The **Classroom** drawer holds everything made for a class. Each button opens a small window with a few choices and makes a new design you can still edit.
+
+![The Classroom drawer with a Bingo card on the page](docs/screenshots/classroom.png)
+
+- **My lists and class details**: class details (teacher, school, class, room, year) added with one click and filled into {Teacher}-style placeholders in templates, a school logo, saved lists edited as a table and sent to Bulk create, and upcoming birthdays from a Birthday column. **Put these names on the page** fills the name rows of the attendance, sign-in, allergy and class helper templates. **Seating plan** (under My class) draws a desk for each name in rows, groups of four or six, a horseshoe or a circle; select a desk and Change name renames it.
+- **Puzzles and worksheets**: word search, crossword and word scramble from your words, and a math practice page, each with an answer key. The groups below are its Preschool pages.
+- **Writing**: name tracing (ball-and-stick letters; names from a class list, first names only, big first letter), **Trace words or a sentence** from your own words, tracing lines and shapes, and cutting practice.
+- **Letters and sounds**: letter tracing, beginning sounds and find the letter.
+- **Numbers**: number tracing, count and write, ten frames, I spy and count, count and graph, missing numbers on a grid up to 100, and telling the time (read the clock or draw the hands, from o'clock to five minutes).
+- **Thinking and puzzles**: matching (pictures, letters, numbers or shadows), odd one out, big and small, what comes next, cut and paste sorting, dot-to-dot, mazes, picture sudoku, and a **Number strip puzzle** that cuts one of your photos into numbered strips to put back in counting order.
+- **Games**: **Bingo** with a different card for each child (6 to 30) and calling cards, with pictures, letters, numbers or your own words, and a **Memory game** of 6, 9 or 12 pairs (the same picture, a picture and its word, big and small letters, or a number and its dots). Both can use **My photos**: photos you choose, each called by its file name.
+- **Checklists**: a page per child (letters, letter sounds, or numbers, shapes and colours) with three check-ins.
+- **Posters and wall cards**: alphabet cards, number cards, colours, shapes, a calendar and weather set, and sixteen Feelings cards, four to a page or one big card a page.
+- Twelve **Preschool templates** (daily report, sign-in sheet, visual schedule, class helpers, weekly lesson plan, monthly attendance, allergy alert, All about me, permission slip, class rules, welcome letter, Our week newsletter) fill in the class details.
+
+![Pages it makes: Bingo, a seating plan, telling the time, picture sudoku, feelings cards, word tracing, a memory game and missing numbers](docs/screenshots/pages.png)
+
 ## Photos
 
 Open a folder of Canon CR2 and JPEG files, flip through them, mark picks, rejects and stars with the mouse or the keyboard, adjust, retouch and crop the ones you keep, and deliver them as JPEGs.
 
+![Develop in Photos: the Adjust drawer, the photo and the filmstrip](docs/screenshots/photos.png)
+
+The pictures in this screenshot are drawn stand-ins, not photographs.
+
 - RAW and JPEG files with the same name are shown as one photo.
 - Your originals are only ever read. Ratings live in `<shoot>/.shootstudio/shoot.json` and edits in `<shoot>/.shootstudio/recipes/`, next to the photos. Delete `.shootstudio` and you're back to the camera files.
 
-Everything works with the mouse: the Grid, Photo, Compare and Develop buttons switch views; the bar above the photos has Pick, Reject, Unflag, the stars and Clear stars, Copy and Paste settings, Fit and 100%, Select all and Clear selection in the grid, and in Develop Hold for before, Undo, Redo and zoom. In the grid, each thumbnail has a select button, and pointing at a photo shows a flag and star bar on it. The Shortcuts button lists every key. Arrows over the photo and the filmstrip under it move between photos. Develop's settings sit in drawers on the left (Adjust, Looks, Crop, Retouch), and Looks shows each look as a picture of the photo.
+Everything works with the mouse: the Grid, Photo, Compare and Develop buttons switch views; the bar above the photos has Pick, Reject, Unflag, the stars and Clear stars, Copy and Paste settings, Fit and 100%, Select all and Clear selection in the grid, and in Develop Hold for before, Undo, Redo and zoom. In the grid, each thumbnail has a select button, and pointing at a photo shows a flag and star bar on it. The Shortcuts button lists every key. Arrows over the photo and the filmstrip under it move between photos. Develop's settings sit in drawers on the left (Adjust, Looks, Crop, Local, Retouch), and Looks shows each look as a picture of the photo.
 
 Keys: arrows move, Enter opens and closes the loupe, C compares, Esc goes back to the grid, P picks, X rejects, U unflags, 1–5 set stars, 0 clears stars.
 
@@ -77,20 +108,24 @@ Retouch, in Develop: pick a brush, then paint over what you want gone; Done reto
 
 Looks, in Develop: pick one from the Look list (black & white, toned such as sepia, or a colour look), then set its strength from 0 to 100%. Every slider still works on top of it. Split toning tints shadows and highlights separately; Finishing adds a vignette (darker or lighter corners), film grain and a faded, matte black.
 
+Adjust, in Develop: White balance, Light (with an **Auto** button that sets exposure, contrast, highlights, shadows, whites and blacks to suit the photo), **Presence** (Texture, Clarity and Dehaze), a **Tone curve** with Darkest, Darks, Lights and Brightest over a histogram, and a **Colour mixer** that changes the hue, saturation and brightness of one of eight colours without touching the others.
+
+Local adjustments, in Develop's Local drawer: add a gradient or a circle, drag it out on the photo, then change the Light, Warmth and Saturation of just that part, such as darkening a bright sky or lifting a face.
+
 Detail, in Develop's Adjust drawer: Sharpen adds definition; Masking limits it to edges. Colour noise and Luminance noise reduce coloured speckles and grain.
 
 Presets, at the top of the Looks drawer, save the current settings under a name for every shoot; choose one from the Presets list to apply it, and Ctrl+Z takes it back off. Retouch strokes belong to one photo, so presets and copy/paste leave them alone.
 
-Crop, in Develop: R shows the crop frame. Drag inside it to move it, drag a corner or edge to resize it, pick an aspect ratio (Swap turns it between landscape and portrait) and use Straighten to level a horizon. Enter applies the crop (so does switching to another drawer), and Esc or Cancel crop discards it; Reset crop goes back to the whole photo. Like every edit, the original is untouched.
+Crop, in Develop: R shows the crop frame. Drag inside it to move it, drag a corner or edge to resize it, pick an aspect ratio (Swap turns it between landscape and portrait) and use Straighten to level a horizon. Vertical and Horizontal fix lines that lean in when the camera was tilted up at a building. Enter applies the crop (so does switching to another drawer), and Esc or Cancel crop discards it; Reset crop goes back to the whole photo. Like every edit, the original is untouched.
 
-Deliver: Ctrl+E, or the Deliver… button, saves finished JPEGs for the client: the picks, the selected photos, or everything except rejects. Choose full size or 2048 pixels on the long edge for the web, a JPEG quality, and whether files are named after the client and numbered in shoot order (Smith-Wedding-0001.jpg) or keep their own names. They go to `<shoot>/Delivered/<client>` unless you choose another folder, and a PROOF watermark can be added at the bottom right. Stop finishes the current photo and stops there. Delivering never writes inside `.shootstudio` and never touches the originals.
+Deliver: Ctrl+E, or the Deliver… button, saves finished JPEGs for the client: the picks, the selected photos, or everything except rejects. Choose full size or 2048 pixels on the long edge for the web, a JPEG quality, and whether files are named after the client and numbered in shoot order (Smith-Wedding-0001.jpg) or keep their own names. They go to `<shoot>/Delivered/<client>` unless you choose another folder, a PROOF watermark can be added at the bottom right, and a Copyright line is written into each photo's details (EXIF). Stop finishes the current photo and stops there. Delivering never writes inside `.shootstudio` and never touches the originals.
 
 Copy and paste: Ctrl+C copies a photo's settings and Ctrl+V pastes them, onto the open photo in Develop or onto the selected photos in the grid. A thumbnail's select button or Ctrl+click adds a photo to the selection, Shift+click adds a run of photos, Ctrl+A selects them all and Esc clears it.
 - The wheel zooms at the pointer up to 1600%; + and − step, 0 fits the photo and 1 shows 100% (in Develop these two zoom instead of rating), Z toggles between the two; a navigator in the corner shows where you are. Hold Space and drag, or drag with the middle button, to move around. Esc puts the brush down; a second Esc goes back to the grid.
 
 ## Install (Zorin OS, Ubuntu and similar)
 
-1. Download `KB.Studio_<version>_amd64.AppImage` from the [latest release](https://github.com/matthewjaybarr-png/shoot-studio/releases/latest).
+1. Download `KB.Studio_<version>_amd64.AppImage` from the [latest release](https://github.com/matthewjaybarr-png/KB-Studio/releases/latest).
 2. Move it to `~/Applications/KB-Studio.AppImage` and make it executable: right-click → Properties → Permissions → "Allow executing file as program", or `chmod +x ~/Applications/KB-Studio.AppImage`.
 3. AppImages need FUSE 2. If the app doesn't start, install it: `sudo apt install libfuse2` on Zorin 17 / Ubuntu 22.04, or `sudo apt install libfuse2t64` on Ubuntu 24.04 and later.
 4. Start it once by double-clicking. KB Studio then adds itself to the app menu with its icon, and on Zorin OS and other GNOME desktops pins itself to the taskbar. It pins itself only once: if you unpin it, it stays unpinned. Each update refreshes the menu entry and icon, and if you move the AppImage, the next launch points the entry at the new place.
@@ -108,10 +143,11 @@ Needs Rust, Node.js and the [Tauri 2 Linux prerequisites](https://v2.tauri.app/s
 ```sh
 cargo test --release --manifest-path src-tauri/Cargo.toml   # Rust tests
 node ui-check.cjs                                           # UI in headless Chromium (CHROMIUM=... to pick the browser)
+node engine-check.cjs && node engine-app-check.cjs          # the canvas engine, and every template and maker against main
 npx @tauri-apps/cli@2 dev                                   # run the app
 ```
 
-`live-check.sh` drives the real window on a hidden Hyprland monitor; it runs the release binary, so build it first with `cargo build --release --manifest-path src-tauri/Cargo.toml`. See the comment at its top.
+`live-check.sh` drives the real window on a hidden Hyprland monitor; it runs the release binary, so build it first with `cargo build --release --manifest-path src-tauri/Cargo.toml`. See the comment at its top. `real-check/run.sh` runs a scripted scenario in the real window the same way; the README screenshots were taken with it.
 
 ## Releasing
 
