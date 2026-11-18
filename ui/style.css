@@ -280,7 +280,7 @@ body.away>header,body.away>#photo-bar,body.away>#filmstrip,body.away>#grid,body.
 #create-whatsnew.aside-fade,#create-import-note.aside-fade{opacity:.25;pointer-events:none}
 #create-whatsnew h3,#create-import-note h3{margin:0 0 6px;font-size:15px}#create-whatsnew ul,#create-import-note ul{margin:0 0 12px;padding-left:18px;color:var(--muted)}#create-whatsnew li,#create-import-note li{margin:4px 0}
 #create-import-note{left:auto;right:16px;width:380px;z-index:26}
-#create-whatsnew,#create-import-note{max-height:calc(100% - 32px);overflow:auto;box-sizing:border-box}#whatsnew-ok{position:sticky;bottom:0;box-shadow:0 0 0 10px var(--panel)}
+#create-whatsnew,#create-import-note{max-height:calc(100% - 32px);overflow:auto;box-sizing:border-box}#whatsnew-ok{position:sticky;bottom:0;display:block;width:100%;box-shadow:0 0 0 14px var(--panel)}
 #create-crop-dialog[open]{display:flex;flex-direction:column;width:90vw;height:85vh;background:var(--panel);color:inherit;border:1px solid var(--edge)}
 #create-crop-dialog::backdrop{background:var(--backdrop)}
 .class-detail{display:grid;grid-template-columns:64px 1fr 30px;gap:4px;align-items:center;margin:4px 0}.class-detail label{font-size:12px;color:var(--muted)}.class-detail input{min-width:0}.class-detail button{padding:4px 0}

@@ -79,6 +79,8 @@ const half = v => { const i = new Uint32Array(new Float32Array([v]).buffer)[0], 
 // rgb: every value in order, or one value for them all.
 const rawImage = (w, h, rgb) => { const b = new ArrayBuffer(8 + w * h * 6), px = new Uint16Array(b, 8); new Uint32Array(b, 0, 2).set([w, h]); if (Array.isArray(rgb)) px.set(rgb.map(half)); else px.fill(half(rgb)); return b; };
 const jpeg = () => new Promise(done => { const c = document.createElement('canvas'); c.width = 60; c.height = 40; c.getContext('2d').fillRect(0, 0, 60, 40); c.toBlob(b => b.arrayBuffer().then(done), 'image/jpeg'); });
+// The names creations.rs refuses to save (no backslashes here: this script is inside a template string).
+const badName = n => !n.trim() || n.startsWith('.') || [...n].some(c => c < ' ' || ('/:*?"<>|' + String.fromCharCode(92)).includes(c));
 window.__TAURI__ = { core: { Channel: class { onmessage() {} }, invoke: async (command, args, options) => {
   calls.push({ command, args, options });
   const failNow = window.failSave; // decided when the call starts, so a held save keeps the outcome it started with
@@ -87,6 +89,7 @@ window.__TAURI__ = { core: { Channel: class { onmessage() {} }, invoke: async (c
   if (command === 'load_creation') { const v = disk['c:' + args.kind + ':' + args.name]; if (v === undefined) throw 'not found'; return v; }
   if (command === 'save_creation' && failNow) throw 'disk full';
   if (command === 'quit') return null;
+  if (command === 'save_creation' && badName(decodeURIComponent(options.headers.name))) throw 'a name needs 1–80 characters, no slashes or leading dot';
   if (command === 'save_creation') { disk['c:' + options.headers.kind + ':' + decodeURIComponent(options.headers.name)] = new TextDecoder().decode(args); return null; }
   if (command === 'delete_creation') { delete disk['c:' + args.kind + ':' + args.name]; return null; }
   if (command === 'save_output') { const h = options.headers, name = decodeURIComponent(h.name) + '.' + h.ext; if (window.saveCancel && h.ask !== 'no') return ''; (window.outputs ??= {})[name] = { bytes: args, ask: h.ask }; return '/home/me/Downloads/' + name; }
@@ -1687,6 +1690,7 @@ const test = `<script>
     settings.seen = WHATS_NEW - 1; paintWhatsNew();
     step(!$('#create-whatsnew').hidden, 'someone who saw the last card sees the new one');
     step(!$('#create-whatsnew').hidden, "What's new shows in Create until it is dismissed");
+    step($('#whatsnew-ok').offsetWidth >= $('#create-whatsnew ul').offsetWidth - 2, 'Got it spans the card, so the list never shows beside it as it scrolls under: ' + $('#whatsnew-ok').offsetWidth + ' of ' + $('#create-whatsnew ul').offsetWidth);
     $('#whatsnew-ok').click();
     await until(() => $('#create-whatsnew').hidden && JSON.parse(disk.createSettings).seen === WHATS_NEW, "Got it hides What's new for good");
     // The 0.12 view: a pasteboard around the page, panning, drops where things land, transform readouts.
@@ -3215,6 +3219,7 @@ const test = `<script>
           step($('#sheet-dialog').open, label + ' opens the window');
           $('#sheet-make').click();
           await until(() => design.title !== before && !navigating && !$('#sheet-dialog').open, () => label + ': ' + $('#sheet-note').textContent);
+          step(!badName(design.title), () => label + ' gets a name that can be saved: ' + design.title);
           step(check(allPages()), () => label + ' makes its pages: ' + allPages().map(p => p.objects.map(o => o.kbName).join(',')).join(' / '));
           if (window.uiDump) for (const [i, page] of allPages().entries()) uiDump.push([label + ' ' + (i + 1), await render(0.75, 'png', 0.92, page)]);
         };
@@ -3259,7 +3264,8 @@ const test = `<script>
         await made('#sheet-sizes', null, pages => pages.length === 2 && pages[1].objects.filter(o => o.kbName === 'Answer').length === 6 && pages[0].objects.filter(o => o.kbName === 'Instructions').length === 6, 'Big and small');
         const sp = sortPicks('hot-cold', seededRandom(12));
         step(sp.length === 8 && sp.filter(it => it.group === 'Hot').length === 4 && new Set(sp.map(it => it.p)).size === 8, () => 'sorting: four of each group, none twice: ' + JSON.stringify(sp));
-        await made('#sheet-sort', () => { step(shownRow('#sheet-sort'), 'sorting asks what to sort into'); $('#sheet-sort').value = 'go-fly'; },
+        { const ids = [...document.querySelectorAll('[id]')].map(e => e.id); step(new Set(ids).size === ids.length, () => 'no two elements share an id (the sorting button once shared one with its list, so it did nothing): ' + ids.filter((id, i) => ids.indexOf(id) !== i)); }
+        await made('#sheet-sorting', () => { step(shownRow('#sheet-sort'), 'sorting asks what to sort into'); $('#sheet-sort').value = 'go-fly'; },
           pages => pages.length === 2 && pages[0].objects.filter(o => o.kbName === 'Picture to cut out').length === 8 && pages[1].objects.filter(o => o.kbName === 'Answer').length === 8 && !pages[1].objects.some(o => o.kbName === 'Picture to cut out'), 'Cut and paste sorting');
         const gs = spyScene(seededRandom(13), 4, GRAPH_AREA, 46);
         step(gs.counts.every(c => c >= 2 && c <= 8) && gs.spots.every((s, i) => gs.spots.every((t, j) => i === j || Math.hypot(s.x - t.x, s.y - t.y) > 46)), () => 'graph pictures fit their box without overlapping, at most 8 a kind: ' + gs.counts);
