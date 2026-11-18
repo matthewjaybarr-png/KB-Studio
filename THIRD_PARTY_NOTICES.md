@@ -40,3 +40,7 @@ Ten fonts use SIL OFL 1.1; Roboto Slab uses Apache 2.0. The Latin WOFF2 subsets 
 ## Clip art (CC-BY 4.0)
 
 The clip art in Create is Twemoji, © Twitter, Inc and other contributors, licensed under Creative Commons Attribution 4.0 International (`LICENSES/twemoji-CC-BY-4.0.txt`, https://creativecommons.org/licenses/by/4.0/). The SVGs are used as published in @twemoji/svg 15.0.0. The full package has 3,720 SVGs (8,147,297 bytes); the index exposes all 3,655 Unicode 15.0 fully-qualified emoji and 9 components. Older nonstandard variants remain bundled but are not indexed. The app shows this credit beside the clip art picker.
+
+## Spelling word list (SCOWL)
+
+Check spelling in Create reads `ui/words-en-us.txt`, made from SCOWL (Spell Checker Oriented Word Lists) 2020.12.07, Copyright 2000-2018 by Kevin Atkinson, from http://wordlist.aspell.net/. It joins the English and American word, contraction, capitalised, proper-name and abbreviation lists up to size 60, commonest first, without the possessive forms. SCOWL's copyright and permission notices, and those of the lists it is built from, are in `LICENSES/scowl-word-list.txt`.

@@ -534,3 +534,4 @@ header,.create-bar{border-bottom-color:var(--pink)}
 #bulk-class-name-row{display:inline-flex;gap:6px;flex:1;min-width:220px}#bulk-class-name{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--edge);border-radius:8px;font:inherit}
 #bulk-class-note{color:var(--muted);font-size:13px}#bulk-class-delete.sure{color:#fff;background:#d6455d}
 .upper-canvas.eyedropper{cursor:crosshair!important}
+#pop-spell{width:270px}#spell-word{margin:2px 0;font-size:18px;font-weight:700;overflow-wrap:anywhere}#spell-ideas{margin-bottom:8px}#spell-ideas button{font-weight:600}#spell-mine{margin-top:8px}#spell-mine-list{display:flex;flex-wrap:wrap;gap:4px}#spell-mine-list button{padding:2px 8px;font-size:12px}

@@ -1902,7 +1902,7 @@ function paintBw() { $('#create-stage').classList.toggle('bw', $('#create-bw').c
 async function loadSettings() {
   const s = await invoke('load_create_settings').catch(() => null);
   settingsLoaded = true;
-  if (s && typeof s === 'object') settings = { colours: Array.isArray(s.colours) ? s.colours.filter(c => hex(c)).slice(0, 12) : [], fonts: Array.isArray(s.fonts) ? s.fonts.filter(f => FONTS.includes(f)) : [], seen: Number.isInteger(s.seen) ? s.seen : 0, rulers: s.rulers === true, closed: Array.isArray(s.closed) ? s.closed.filter(x => typeof x === 'string').slice(0, 20) : ['frames', 'grids', 'graphics'], projects: cleanProjects(s.projects), lastClass: typeof s.lastClass === 'string' ? s.lastClass.slice(0, 80) : '', backup: s.backup, classroom: s.classroom };
+  if (s && typeof s === 'object') settings = { colours: Array.isArray(s.colours) ? s.colours.filter(c => hex(c)).slice(0, 12) : [], fonts: Array.isArray(s.fonts) ? s.fonts.filter(f => FONTS.includes(f)) : [], seen: Number.isInteger(s.seen) ? s.seen : 0, rulers: s.rulers === true, closed: Array.isArray(s.closed) ? s.closed.filter(x => typeof x === 'string').slice(0, 20) : ['frames', 'grids', 'graphics'], projects: cleanProjects(s.projects), lastClass: typeof s.lastClass === 'string' ? s.lastClass.slice(0, 80) : '', backup: s.backup, classroom: s.classroom, words: Array.isArray(s.words) ? s.words.filter(w => typeof w === 'string' && w).slice(-2000) : [] };
   paintWhatsNew();
   if (typeof paintFolds === 'function') paintFolds();
 }

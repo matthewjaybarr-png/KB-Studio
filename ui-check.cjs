@@ -3528,6 +3528,28 @@ const test = `<script>
       step(page1Text?.text === 'Spring leaves Spring' && $('#find-count').textContent.startsWith('Replaced'), () => 'Replace all changes every page: ' + page1Text?.text + ' / ' + $('#find-count').textContent);
       step(allPages().every(pg => !JSON.stringify(pg.objects).match(/"text":"[^"]*[Ff]all/)), 'no match is left anywhere');
       closeMenus();
+      // Check spelling: what it knows, what it offers, and the window: change a word, add one to My words, take it out.
+      await spellReady();
+      const sm = new Set(['zorblat']);
+      step(spellKnown('Cat', sm) && spellKnown('CAT', sm) && spellKnown("teacher's", sm) && spellKnown('Monday', sm) && !spellKnown('monday', sm) && !spellKnown('teh', sm) && spellKnown('Zorblat', sm) && spellKnown('well-known', sm) && spellKnown('3rd', sm) && !spellKnown('colour', sm) && spellKnown('don’t', sm) && spellKnown('playdough', sm), 'spelling knows capitals, possessives, hyphens and her own words');
+      step(spellSuggest('teh')[0] === 'the' && spellSuggest('monday')[0] === 'Monday' && spellSuggest('Freind')[0] === 'Friend' && spellSuggest('becuase').includes('because') && spellSuggest('colour').includes('color') && spellSuggest('TEH')[0] === 'THE' && !spellSuggest('comming').includes('cumming') && spellSuggest('comming')[0] === 'coming' && spellSuggest('helo').includes('hello') && spellSuggest('homewrok')[0] === 'homework', () => 'close words: ' + [spellSuggest('teh'), spellSuggest('monday'), spellSuggest('Freind'), spellSuggest('becuase'), spellSuggest('colour')].join(' / '));
+      step(spellTokens('Mail me@school.org or see www.school.org, the 3rd “frend’s” day').map(t => t.word).join() === 'Mail,or,see,the,3rd,frend’s,day', () => 'spelling leaves out links and e-mail addresses: ' + spellTokens('Mail me@school.org or see www.school.org, the 3rd “frend’s” day').map(t => t.word));
+      await showPage(1); const typo = addText('body'); typo.exitEditing(); typo.set({ text: 'Teh best freind' }); commitDesign();
+      await showPage(0); $('#file-open').click(); $('#file-spell').click();
+      await until(() => !$('#spell-actions').hidden || /No spelling/.test($('#spell-status').textContent), () => 'File has Check spelling: ' + $('#spell-status').textContent);
+      for (let n = 0; n < 60 && spell.hits[0] && spell.hits[0].word !== 'Teh'; n++) { spell.skipped.add(spellKey(spell.hits[0].word).toLowerCase()); await spellShow(); }
+      step(seen('#pop-spell') && spell.hits[0]?.word === 'Teh' && pageAt === 1 && $('#spell-word').textContent === 'Teh' && $('#spell-ideas button')?.textContent === 'The' && /word/.test($('#spell-status').textContent), () => 'spelling shows the word on its page with close words: ' + JSON.stringify(spell.hits[0]) + ' ' + $('#spell-ideas').textContent);
+      $('#spell-ideas button').click(); await until(() => spell.hits[0]?.word === 'freind', 'a close word is clicked');
+      step(board.getObjects().some(o => o.text === 'The best freind'), 'clicking a close word changes it on the page');
+      $('#create-undo').click(); await until(() => board.getObjects().some(o => o.text === 'Teh best freind'), 'Undo takes a spelling change back');
+      $('#create-redo').click(); await until(() => board.getObjects().some(o => o.text === 'The best freind'), 'Redo puts it back');
+      $('#spell-add').click(); await until(() => !spell.hits.some(h => h.word === 'freind') && settings.words.includes('freind'), 'Add to my words stops the word being questioned');
+      step(calls.some(c => c.command === 'save_create_settings' && c.args.settings.words?.includes('freind')) && !$('#spell-mine').hidden && $('#spell-mine-list button').textContent === 'freind ×', 'my words are saved with the settings and listed');
+      $('#spell-mine-list button').click(); await until(() => spell.hits.some(h => h.word === 'freind') && !settings.words.length, 'taking a word out of My words questions it again');
+      $('#spell-skip').click(); await until(() => !spell.hits.some(h => h.word === 'freind'), 'Skip this word leaves it alone');
+      step(board.getObjects().some(o => o.text === 'The best freind') || allPages()[1].objects.some(o => o.text === 'The best freind'), 'a skipped word is not changed');
+      closeMenus(); spell.skipped.clear();
+      showDrawer('text'); $('#text-spell').click(); await until(() => seen('#pop-spell') && $('#spell-status').textContent !== 'Reading the pages…', 'the Text panel has Check spelling too'); closeMenus();
       await showPage(1); await deletePage(); await until(() => designPages.length === 1 && pageAt === 0, 'back to one page'); }
     await settle(flush(), 'tools save'); await settle(openDesign(design.title), 'tools reopen');
     step(readTable(keptTable).cells.length === 4, 'a table is still a table after save and reopen');
