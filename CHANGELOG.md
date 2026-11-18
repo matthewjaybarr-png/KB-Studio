@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 
 - Classroom's Puzzles and worksheets has a Number strip puzzle, under Thinking and puzzles: choose a photo and it is cut into 5 or 10 strips with a number under each (counting in ones, twos, fives or tens). The children cut the strips out and put them in counting order to make the picture again. Each photo you choose makes its own page.
 - Classroom's Puzzles and worksheets has Trace words or a sentence, under Writing: your own words or short sentences (or one of your lists) in dotted letters to trace, with a line under each to write it again if you want one.
@@ -21,6 +21,8 @@
 - Create's picture Filters have Duotone: shadows and highlights become two colours. Pick one of six pairs or choose your own Shadows and Highlights colours; None takes it off and keeps any look.
 
 ## 1.1.0
+
+Not released on its own; everything here first shipped in 1.2.0.
 
 - Develop has a Colour mixer: pick one of eight colours (red to magenta) and change its hue, saturation and brightness without touching the other colours or greys. "Reset colour mixer" clears it. Edits made with it need this version or newer to open.
 - Develop has Presence: Texture brings out (or smooths) fine detail, Clarity adds punch to midtones, and Dehaze cuts through haze or adds a soft veil. Edits that use them need this version or newer to open.
