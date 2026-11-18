@@ -143,6 +143,7 @@ async function run(engine, dpr, temp) {
       await mouse('mouseMoved', pts[0]); await mouse('mousePressed', pts[0], [], { clickCount: 1 }); for (const p of pts.slice(1)) await mouse('mouseMoved', p, [], { buttons: 1 }); await mouse('mouseReleased', pts.at(-1), [], { clickCount: 1 }); }
     await look('rotate the selection');
     await click(await center(1), ['shift']); await look('shift-click removes one from the selection');
+    await click(await center(1), ['shift']); await look('shift-click adds one to the turned selection');
     await click({ x: 590, y: 410 }); await look('discard to the page');
     await drag({ x: 8, y: 8 }, { x: 340, y: 300 }, { hold: true }); await look('drag-box in progress');
     await mouse('mouseReleased', { x: 340, y: 300 }, [], { clickCount: 1 }); await look('drag-box released');
