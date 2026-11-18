@@ -8,10 +8,14 @@
   window.addEventListener('error', e => log.push({ error: String(e.message), at: (e.filename || '').split('/').pop() + ':' + e.lineno }));
   window.addEventListener('unhandledrejection', e => log.push({ rejection: String(e.reason && e.reason.stack || e.reason).slice(0, 400) }));
   const b64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
+  // Stand-ins for her photos (the file chooser can't be driven): wide pictures with a face-sized circle in the middle.
+  const snaps = async n => { const files = []; for (let i = 0; i < n; i++) { const c = Object.assign(document.createElement('canvas'), { width: 900, height: 600 }), x = c.getContext('2d'); x.fillStyle = `hsl(${i * 33} 60% 70%)`; x.fillRect(0, 0, 900, 600); x.fillStyle = `hsl(${i * 33 + 180} 60% 40%)`; x.beginPath(); x.arc(450, 300, 220, 0, 7); x.fill(); files.push(new File([await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9))], `child_${i + 1}.jpg`, { type: 'image/jpeg' })); } return files; };
   const MAKERS = {
     'sheet-bingo': () => { set('#sheet-bingo-what', 'pictures'); set('#sheet-bingo-size', '4'); set('#sheet-bingo-count', '6'); },
     'sheet-bingo words': () => { set('#sheet-bingo-what', 'words'); set('#sheet-bingo-size', '3'); set('#sheet-bingo-count', '6'); $('#sheet-words').value = 'cat\ndog\nsun\nhat\npig\nbus\nred\nbig\nrun\njump\nplay\nbutterfly'; },
-    'sheet-seating': () => { set('#sheet-seat-layout', 'groups4'); set('#sheet-seat-order', 'mixed'); $('#sheet-words').value = Array.from({ length: 22 }, (_, i) => ['Ava', 'Ben', 'Charlotte', 'Dev', 'Smith, Ella'][i % 5] + (i > 4 ? ' ' + i : '')).join('\n'); },
+'sheet-bingo photos': async () => { sheetPhotos = await snaps(12); set('#sheet-bingo-what', 'photos'); set('#sheet-bingo-size', '3'); set('#sheet-bingo-count', '6'); },
+    'sheet-memory photos': async () => { sheetPhotos = await snaps(12); set('#sheet-memory-what', 'photo-names'); set('#sheet-memory-pairs', '6'); },
+        'sheet-seating': () => { set('#sheet-seat-layout', 'groups4'); set('#sheet-seat-order', 'mixed'); $('#sheet-words').value = Array.from({ length: 22 }, (_, i) => ['Ava', 'Ben', 'Charlotte', 'Dev', 'Smith, Ella'][i % 5] + (i > 4 ? ' ' + i : '')).join('\n'); },
     'sheet-clock': () => { set('#sheet-clock-level', 'quarter'); set('#sheet-clock-mode', 'read'); },
     'sheet-memory': () => { set('#sheet-memory-what', 'words'); set('#sheet-memory-pairs', '9'); },
     'sheet-missing': () => { set('#sheet-missing-upto', '50'); set('#sheet-missing-share', 'half'); },
@@ -25,7 +29,7 @@
       if (ONLY !== 'ALL' && ONLY !== name) continue;
       const id = name.split(' ')[0], tag = name.replace(/\W+/g, '-'), rec = { name }, before = design.title;
       try {
-        $('#' + id).click(); await wait(300); setup(); await wait(200);
+        $('#' + id).click(); await wait(300); await setup(); await wait(200);
         $('#sheet-make').click();
         for (let t = 0; t < 120 && (design.title === before || $('#sheet-dialog').open); t++) await wait(250);
         await wait(1200);

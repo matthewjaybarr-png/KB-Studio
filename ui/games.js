@@ -16,19 +16,50 @@ function fitText(text, x, y, w, h, o = {}) {
   const size = o.fontSize || h * 0.56;
   return fitInto(T(text, x, y, { width: w, textAlign: 'center', fontFamily: 'Fredoka', fontWeight: 'bold', fill: '#3a3a3a', kbName: 'Square words', ...o, fontSize: size }), x, y, w, h, size);
 }
-// One thing in a square `s` wide at (x, y): a picture (with its word under it if `label`), or words as big as fit
-// (`item.size` caps them, as a share of the square).
+// ---- Her own photos in the games: chosen in the window, each cut square and made small once ----
+let sheetPhotos = [];
+const photoUrls = new Map();
+const photoName = file => file.name.replace(/\.[^.]*$/, '').replace(/[_-]+/g, ' ').trim().slice(0, 30) || 'photo';
+// The middle square of a photo, 360 pixels across: plenty for a card, and small enough for thirty cards of them.
+async function photoUrl(file) {
+  if (photoUrls.has(file)) return photoUrls.get(file);
+  const bitmap = await createImageBitmap(file), side = Math.min(bitmap.width, bitmap.height), out = Object.assign(document.createElement('canvas'), { width: 360, height: 360 });
+  out.getContext('2d').drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 360, 360);
+  bitmap.close?.();
+  photoUrls.set(file, out.toDataURL('image/jpeg', 0.85));
+  return photoUrls.get(file);
+}
+const photoItems = () => sheetPhotos.map(file => ({ photo: file, text: photoName(file) }));
+// A clip-art picture or one of her photos, `size` square, centred on (cx, cy).
+async function itemPic(item, cx, cy, size) {
+  if (!item.photo) return pic(item.pic, cx, cy, size);
+  const image = await kbe.FabricImage.fromURL(await photoUrl(item.photo));
+  image.set({ left: cx - size / 2, top: cy - size / 2, scaleX: size / image.width, scaleY: size / image.height, kbName: 'Photo ' + item.text });
+  return image;
+}
+function paintSheetPhotos() {
+  const what = sheet.kind === 'bingo' ? $('#sheet-bingo-what').value : sheet.kind === 'memory' ? $('#sheet-memory-what').value : '';
+  $('#sheet-photos-row').hidden = $('#sheet-photos-hint').hidden = !what.startsWith('photo');
+  $('#sheet-photos-count').textContent = sheetPhotos.length ? `${sheetPhotos.length} photo${sheetPhotos.length === 1 ? '' : 's'} chosen` : 'None chosen yet';
+}
+$('#sheet-photos-add').onclick = () => $('#sheet-photos-file').click();
+$('#sheet-photos-file').onchange = e => { sheetPhotos = [...e.target.files].filter(f => f.type.startsWith('image/') || pictureType(f.name)).slice(0, 60); e.target.value = ''; paintSheetPhotos(); };
+
+// One thing in a square `s` wide at (x, y): a picture or photo (with its word under it if `label`), or words as big
+// as fit (`item.size` caps them, as a share of the square).
 async function squareItem(item, x, y, s, label) {
-  if (item.pic && !label) return [await pic(item.pic, x + s / 2, y + s / 2, s * 0.76)];
-  if (!item.pic) return [fitText(item.text, x + 4, y, s - 8, s, item.size ? { fontSize: s * item.size } : {})];
-  return [await pic(item.pic, x + s / 2, y + s * 0.4, s * 0.58), fitText(item.text, x + 4, y + s * 0.72, s - 8, s * 0.26, { fontSize: s * 0.15 })];
+  const art = item.pic || item.photo;
+  if (art && !label) return [await itemPic(item, x + s / 2, y + s / 2, s * (item.photo ? 0.9 : 0.76))];
+  if (!art) return [fitText(item.text, x + 4, y, s - 8, s, item.size ? { fontSize: s * item.size } : {})];
+  return [await itemPic(item, x + s / 2, y + s * 0.4, s * (item.photo ? 0.66 : 0.58)), fitText(item.text, x + 4, y + s * 0.74, s - 8, s * 0.24, { fontSize: s * 0.15 })];
 }
 
 // ---- Bingo ----
 const BINGO_PICS = [...new Set(MATCH_PICS.concat(COUNT_PICS, PATTERN_PICS))];
-// What can be called: pictures, letters, numbers, or her own words (one a line, no repeats, 60 at most).
+// What can be called: pictures, her photos, letters, numbers, or her own words (one a line, no repeats, 60 at most).
 function bingoPool(what, words = '') {
   if (what === 'pictures') return BINGO_PICS.map(p => ({ pic: p, text: plainLabel(p) }));
+  if (what === 'photos') return photoItems();
   if (what === 'capitals' || what === 'small') return Object.keys(LETTER_PICS).map(l => ({ text: what === 'small' ? l.toLowerCase() : l }));
   if (what === 'n20' || what === 'n50') return Array.from({ length: what === 'n20' ? 20 : 50 }, (_, i) => ({ text: String(i + 1) }));
   const seen = new Set();
@@ -165,6 +196,7 @@ function clockPage(title, times, mode, answers) {
 // `pairs` pairs of card faces: the same picture twice, a big and a small letter, a number and that many dots, or a
 // picture and its word.
 function memoryPairs(what, pairs, rand) {
+  if (what.startsWith('photo')) return shuffled(photoItems(), rand).slice(0, pairs).map(item => [item, what === 'photo-names' ? { text: item.text, size: 0.24 } : item]);
   if (what === 'numbers') return Array.from({ length: pairs }, (_, i) => [{ text: String(i + 1) }, { dots: i + 1 }]);
   if (what === 'letters') return shuffled(Object.keys(LETTER_PICS), rand).slice(0, pairs).sort().map(l => [{ text: l }, { text: l.toLowerCase() }]);
   return shuffled(BINGO_PICS, rand).slice(0, pairs).map(p => [{ pic: p }, what === 'words' ? { text: plainLabel(p), size: 0.24 } : { pic: p }]);
@@ -298,6 +330,7 @@ Object.assign(SHEET_KINDS, {
       const cards = bingoCards(pool, size, +$('#sheet-bingo-count').value, seededRandom(seed));
       // Her words the same size on the cards: the size that fits four in five of them, so one long word shrinks alone.
       if (what === 'words' && pool.length) { const s = 672 / size - 8, sizes = pool.map(item => fitText(item.text, 0, 0, s - 8, s).fontSize).sort((a, b) => a - b), share = sizes[Math.floor(sizes.length * 0.2)] / s; for (const item of pool) item.size = share; }
+      if (!cards && what === 'photos') return { error: `A ${size} × ${size} card needs at least ${need} photos, and ${pool.length === 1 ? 'there is 1' : 'there are ' + pool.length} chosen. Choose more photos or pick fewer squares.` };
       if (!cards) return { error: what === 'words' ? `A ${size} × ${size} card needs at least ${need} different words, and there ${pool.length === 1 ? 'is' : 'are'} ${pool.length}. Add more words or pick fewer squares.` : `A ${size} × ${size} card needs ${need} different squares, and there are only ${pool.length} of these. Pick fewer squares.` };
       const pages = [];
       for (const [n, cells] of cards.entries()) pages.push(await bingoPage(title, cells, size, n));
@@ -319,6 +352,7 @@ Object.assign(SHEET_KINDS, {
   memory: { title: 'Memory game', words: false, key: false,
     async make(title, key, seed) {
       const pairs = memoryPairs($('#sheet-memory-what').value, +$('#sheet-memory-pairs').value, seededRandom(seed));
+      if (pairs.length < +$('#sheet-memory-pairs').value) return { error: `${$('#sheet-memory-pairs').value} pairs need that many photos, and ${sheetPhotos.length === 1 ? 'there is 1' : 'there are ' + sheetPhotos.length} chosen. Choose more photos or fewer pairs.` };
       return { pages: await memoryPages(title, pairs), note: `${pairs.length} pairs to cut apart. Print on card so the pictures don't show through.` };
     } },
   missing: { title: 'Missing numbers', words: false,
@@ -342,12 +376,13 @@ Object.assign(SHEET_KINDS, {
   'feelings-cards': { title: 'Feelings', words: false, key: false,
     async make() { return { pages: await cardPages(FEELINGS, cardLayout(), feelingCard), note: `${FEELINGS.length} feelings, from Happy to Sleepy.` }; } }
 });
-const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; };
+const bingoWords = () => { $('#sheet-words-part').hidden = $('#sheet-bingo-what').value !== 'words'; paintSheetPhotos(); };
 $('#sheet-bingo-what').onchange = bingoWords;
 $('#sheet-bingo').onclick = () => { openSheet('bingo'); bingoWords(); };
 $('#sheet-seating').onclick = () => openSheet('seating');
 $('#sheet-clock').onclick = () => openSheet('clock');
-$('#sheet-memory').onclick = () => openSheet('memory');
+$('#sheet-memory-what').onchange = paintSheetPhotos;
+$('#sheet-memory').onclick = () => { openSheet('memory'); paintSheetPhotos(); };
 $('#sheet-missing').onclick = () => openSheet('missing');
 $('#sheet-scramble').onclick = () => openSheet('scramble');
 $('#sheet-sudoku').onclick = () => openSheet('sudoku');
