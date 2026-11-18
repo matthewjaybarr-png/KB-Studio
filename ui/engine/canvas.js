@@ -202,7 +202,12 @@ class ActiveSelection extends Group {
     this._layout({}); for (const o of this._objects) o.group = this;
   }
   add(o) { const keep = this._objects.filter(c => c !== o); this.setObjects([...keep, o]); }
-  remove(o) { this.setObjects(this._objects.filter(c => c !== o)); }
+  remove(o) { // as Fabric: the box keeps its turn and size and is refitted around the ones left
+    const m = this.calcOwnMatrix(), back = inv(m); this._restoreChildren(o); this._objects = this._objects.filter(c => c !== o); if (!this._objects.length) return;
+    const pts = this._objects.flatMap(c => c.getCoords().map(q => tp(q, back))), xs = pts.map(q => q.x), ys = pts.map(q => q.y), x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0, h = Math.max(...ys) - y0, mid = new Point(x0 + w / 2, y0 + h / 2);
+    for (const c of this._objects) c.setCenterPoint(c.getRelativeCenterPoint().subtract(mid));
+    this.width = w; this.height = h; this.setPositionByOrigin(tp(mid, m), 'center', 'center');
+  }
   contains(o) { return this._objects.includes(o); }
   size() { return this._objects.length; }
   item(i) { return this._objects[i]; }
@@ -479,7 +484,7 @@ class Canvas extends StaticCanvas {
     if (this.isDrawingMode) { this.setCursor(this.freeDrawingCursor); if (this._pressed) this.freeDrawingBrush?.onMouseMove(this.getScenePoint(e), { e }); this._fireMouse('move', e); return; }
     if (this._editDrag?.isEditing) this._editDrag._editMove(this.getScenePoint(e));
     else if (this._groupSelector) { const vp = this.getViewportPoint(e); this._groupSelector.left = vp.x - this._groupSelector.x; this._groupSelector.top = vp.y - this._groupSelector.y; this.renderTop(); }
-    else if (!this._transform) { const t = this.findTarget(e); this._setCursor(e, t); this._overOut(e, this.findTarget(e, false, true)); }
+    else if (!this._transform) { const t = this.findTarget(e); this._setCursor(e, t); this._overOut(e, t, this.skipTargetFind ? undefined : this._search(this._objects, tp(this.getViewportPoint(e), inv(this.viewportTransform)))); }
     else this._doTransform(e);
     this._fireMouse('move', e);
   }
@@ -488,11 +493,12 @@ class Canvas extends StaticCanvas {
     const a = this._activeObject instanceof ActiveSelection ? this._activeObject : null, vp = this.getViewportPoint(e), corner = (!a || !a.contains(target)) && target._findTargetCorner(vp, e.pointerType === 'touch');
     if (!corner) this.setCursor(target.isEditing ? 'text' : target.hoverCursor || this.hoverCursor); else this.setCursor(target.controls[corner].cursorFor(e, target));
   }
-  _overOut(e, target) {
-    const old = this._hovered; if (old === target) return;
-    if (old) { old.fire('mouseout', { e, target: old, nextTarget: target }); this.fire('mouse:out', { e, target: old, nextTarget: target }); }
-    if (target) { target.fire('mouseover', { e, target, previousTarget: old }); this.fire('mouse:over', { e, target, previousTarget: old }); }
-    this._hovered = target;
+  _overOut(e, target, actual) { // as Fabric: the canvas also hears when the object really under the pointer changes while a handle keeps the target
+    const old = this._hovered, was = this._hoveredActual, moved = old !== target, under = was !== actual;
+    const out = { e, target: old, nextTarget: target, actualTarget: was, nextActualTarget: actual }, over = { e, target, previousTarget: old, actualTarget: actual, previousActualTarget: was };
+    if ((old && moved) || (was && under)) this.fire('mouse:out', out); if (old && moved) old.fire('mouseout', out); if (was && under && was !== old) was.fire('mouseout', out);
+    if ((target && moved) || (actual && under)) this.fire('mouse:over', over); if (target && moved) target.fire('mouseover', over); if (actual && under && actual !== target) actual.fire('mouseover', over);
+    this._hovered = target; this._hoveredActual = actual;
   }
   _onOut(e) { const t = this._hovered; this.fire('mouse:out', { e, target: t }); this._hovered = undefined; t?.fire('mouseout', { e }); }
   _onEnter(e) { if (!this._transform && !this.findTarget(e)) { this.fire('mouse:over', { e }); this._hovered = undefined; } }
